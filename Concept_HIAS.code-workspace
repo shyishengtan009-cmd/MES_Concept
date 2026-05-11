@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../HIAS-AC-VUE"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "Concept_HIAS"
+	}
+}
