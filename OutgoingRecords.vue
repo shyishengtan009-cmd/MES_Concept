@@ -21,9 +21,9 @@
 
     <!-- ACTION BAR -->
     <div class="action-bar">
-      <button class="act-btn act-new">   <i class="fa-solid fa-plus"></i> New</button>
-      <button class="act-btn act-edit">  <i class="fa-regular fa-pen-to-square"></i> Edit</button>
-      <button class="act-btn act-delete"><i class="fa-regular fa-trash-can"></i> Delete</button>
+      <button class="act-btn act-new"    @click="openNew()"><i class="fa-solid fa-plus"></i> New</button>
+      <button class="act-btn act-edit"   @click="openEditSelected()" :disabled="checkedIds.size !== 1"><i class="fa-regular fa-pen-to-square"></i> Edit</button>
+      <button class="act-btn act-delete" @click="openDeleteSelected()" :disabled="checkedIds.size === 0"><i class="fa-regular fa-trash-can"></i> Delete</button>
       <button class="act-btn act-export"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
       <button class="act-icon-btn" style="margin-left:auto" title="Column settings"><i class="fa-solid fa-magnifying-glass"></i></button>
     </div>
@@ -61,7 +61,7 @@
                 <td>{{ row.stockOutType }}</td>
                 <td>{{ row.document }}</td>
                 <td :class="{ dash: !row.orderNo }">{{ row.orderNo || '—' }}</td>
-                <td>{{ row.method }}</td>
+                <td><span :class="['method-badge', row.method === 'RFID' ? 'badge-rfid' : 'badge-scan']">{{ row.method }}</span></td>
                 <td :class="{ dash: !row.consignee }">{{ row.consignee || '—' }}</td>
                 <td style="text-align:right">{{ row.goodsTotal }}</td>
                 <td style="text-align:right">{{ row.skuTotal }}</td>
@@ -69,8 +69,8 @@
                 <td>{{ row.createdAt }}</td>
                 <td :class="{ dash: !row.createdBy }">{{ row.createdBy || '—' }}</td>
                 <td class="col-actions">
-                  <div><a class="row-edit"  @click.prevent><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
-                  <div><a class="row-del"   @click.prevent><i class="fa-regular fa-trash-can"></i> Delete</a></div>
+                  <div><a class="row-edit" @click.prevent="openEdit(row)"><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
+                  <div><a class="row-del"  @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
                 </td>
               </tr>
               <tr v-if="filteredRows.length === 0">
@@ -91,6 +91,170 @@
         <button class="pag-btn">&gt;</button>
       </div>
     </div>
+
+    <!-- ── DETAIL PANEL OVERLAY ── -->
+    <transition name="overlay-fade">
+      <div v-if="detailMode !== null" class="overlay" @click.self="closeDetail"></div>
+    </transition>
+    <transition name="panel-slide">
+      <div v-if="detailMode !== null" class="detail-panel">
+
+        <!-- Panel header -->
+        <div class="dp-header">
+          <div class="dp-header-left">
+            <span class="dp-badge" :class="detailMode === 'new' ? 'badge-new' : 'badge-edit'">
+              {{ detailMode === 'new' ? 'NEW RECORD' : 'EDIT RECORD' }}
+            </span>
+            <span class="dp-title">{{ detailMode === 'new' ? 'Stock Out — New Entry' : `Stock Out #${editForm.id}` }}</span>
+          </div>
+          <button class="dp-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- Scrollable body -->
+        <div class="dp-body">
+
+          <!-- Section: Record Info -->
+          <div class="dp-section-title">Record Information</div>
+          <div class="dp-grid">
+            <div class="dp-field">
+              <label>Stock Out Type <span class="req">*</span></label>
+              <select v-model="editForm.stockOutType">
+                <option>Sales Out</option>
+                <option>Transfer Out</option>
+                <option>Return Out</option>
+                <option>Shortage Out</option>
+              </select>
+            </div>
+            <div class="dp-field">
+              <label>Document Type <span class="req">*</span></label>
+              <select v-model="editForm.document">
+                <option>With Order</option>
+                <option>Without Order</option>
+              </select>
+            </div>
+            <div class="dp-field">
+              <label>Order No.</label>
+              <input type="text" v-model="editForm.orderNo" placeholder="e.g. SLS-2026-0001" :disabled="editForm.document === 'Without Order'" />
+            </div>
+            <div class="dp-field">
+              <label>Method <span class="req">*</span></label>
+              <select v-model="editForm.method">
+                <option>Scan</option>
+                <option>RFID</option>
+              </select>
+            </div>
+            <div class="dp-field dp-field-full">
+              <label>Consignee</label>
+              <input type="text" v-model="editForm.consignee" placeholder="Enter consignee name" />
+            </div>
+          </div>
+
+          <!-- Section: Quantity & Packaging -->
+          <div class="dp-section-title" style="margin-top:16px">Quantity & Packaging</div>
+          <div class="dp-grid">
+            <div class="dp-field">
+              <label>Goods Qty</label>
+              <input type="number" v-model.number="editForm.goodsTotal" min="0" />
+            </div>
+            <div class="dp-field">
+              <label>SKU Count</label>
+              <input type="number" v-model.number="editForm.skuTotal" min="0" />
+            </div>
+            <div class="dp-field">
+              <label>Pack Unit</label>
+              <select v-model="editForm.packUnit">
+                <option value="">— None —</option>
+                <option>Box</option>
+                <option>Carton</option>
+                <option>Pallet</option>
+                <option>Bag</option>
+                <option>Drum</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Section: Line Items -->
+          <div class="dp-section-title" style="margin-top:16px">
+            Line Items
+            <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
+          </div>
+          <div class="li-table-wrap">
+            <table class="li-table">
+              <thead>
+                <tr>
+                  <th style="min-width:90px">SKU Code</th>
+                  <th style="min-width:140px">SKU Name</th>
+                  <th style="min-width:55px;text-align:right">Qty</th>
+                  <th style="min-width:55px">Unit</th>
+                  <th style="min-width:90px">Batch No.</th>
+                  <th style="min-width:90px">Expiry</th>
+                  <th style="width:32px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(li, idx) in editLineItems" :key="idx">
+                  <td><input class="li-input" v-model="li.skuCode" placeholder="SKU-001" /></td>
+                  <td><input class="li-input" v-model="li.skuName" placeholder="Product name" /></td>
+                  <td><input class="li-input li-num" type="number" v-model.number="li.qty" min="0" /></td>
+                  <td>
+                    <select class="li-select" v-model="li.unit">
+                      <option>pcs</option><option>kg</option><option>L</option><option>box</option><option>carton</option>
+                    </select>
+                  </td>
+                  <td><input class="li-input" v-model="li.batchNo" placeholder="BT-001" /></td>
+                  <td><input class="li-input" type="date" v-model="li.expiryDate" /></td>
+                  <td><button class="li-del-btn" @click="removeLineItem(idx)" title="Remove"><i class="fa-solid fa-xmark"></i></button></td>
+                </tr>
+                <tr v-if="editLineItems.length === 0">
+                  <td colspan="7" style="text-align:center;color:#9e9e9e;font-size:10px;padding:12px">No line items. Click + Add SKU to add one.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Section: Meta -->
+          <div class="dp-section-title" style="margin-top:16px">Record Meta</div>
+          <div class="dp-grid">
+            <div class="dp-field">
+              <label>Created At</label>
+              <input type="date" v-model="editForm.createdAt" />
+            </div>
+            <div class="dp-field">
+              <label>Created By</label>
+              <input type="text" v-model="editForm.createdBy" placeholder="Operator name" />
+            </div>
+          </div>
+
+        </div><!-- /dp-body -->
+
+        <!-- Panel footer -->
+        <div class="dp-footer">
+          <button class="fp-btn fp-cancel" @click="closeDetail"><i class="fa-solid fa-xmark"></i> Cancel</button>
+          <button class="fp-btn fp-save" @click="saveRecord"><i class="fa-solid fa-floppy-disk"></i> {{ detailMode === 'new' ? 'Create' : 'Save Changes' }}</button>
+        </div>
+
+      </div>
+    </transition>
+
+    <!-- ── DELETE CONFIRM MODAL ── -->
+    <transition name="overlay-fade">
+      <div v-if="showDelete" class="overlay" @click.self="showDelete = false"></div>
+    </transition>
+    <transition name="modal-pop">
+      <div v-if="showDelete" class="del-modal">
+        <div class="del-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="del-title">Delete {{ deleteIds.length > 1 ? deleteIds.length + ' Records' : 'Record' }}?</div>
+        <div class="del-msg">
+          This will permanently remove
+          <strong>{{ deleteIds.length > 1 ? deleteIds.length + ' stock out records' : 'stock out record #' + deleteIds[0] }}</strong>.
+          This action cannot be undone.
+        </div>
+        <div class="del-actions">
+          <button class="fp-btn fp-cancel" @click="showDelete = false">Cancel</button>
+          <button class="fp-btn fp-delete" @click="confirmDelete"><i class="fa-regular fa-trash-can"></i> Delete</button>
+        </div>
+      </div>
+    </transition>
 
   </div>
 </template>
@@ -120,25 +284,20 @@ function toggleAll() {
   else checkedIds.value.clear()
 }
 function toggleRow(id: number) {
+  checkedIds.value = new Set(checkedIds.value)
   if (checkedIds.value.has(id)) checkedIds.value.delete(id)
   else checkedIds.value.add(id)
 }
 
+// ── Data ──────────────────────────────────────────
+interface LineItem { skuCode: string; skuName: string; qty: number; unit: string; batchNo: string; expiryDate: string }
 interface StockOutRow {
-  id: number
-  stockOutType: string   // 1=Sales Out, 2=Transfer Out, 3=Return Out, 4=Shortage Out
-  document: string       // 1=With Order, 2=Without Order
-  orderNo: string
-  method: string         // 1=Scan, 2=RFID
-  consignee: string
-  goodsTotal: number
-  skuTotal: number
-  packUnit: string
-  createdAt: string
-  createdBy: string
+  id: number; stockOutType: string; document: string; orderNo: string
+  method: string; consignee: string; goodsTotal: number; skuTotal: number
+  packUnit: string; createdAt: string; createdBy: string
 }
 
-const allRows: StockOutRow[] = [
+const rows = ref<StockOutRow[]>([
   { id: 8, stockOutType: 'Transfer Out', document: 'With Order',    orderNo: '',                method: 'RFID', consignee: '',                   goodsTotal: 0,  skuTotal: 0, packUnit: '',       createdAt: '2026-04-14', createdBy: ''           },
   { id: 7, stockOutType: 'Transfer Out', document: 'With Order',    orderNo: '',                method: 'RFID', consignee: '',                   goodsTotal: 0,  skuTotal: 0, packUnit: '',       createdAt: '2026-04-14', createdBy: ''           },
   { id: 6, stockOutType: 'Sales Out',    document: 'With Order',    orderNo: 'CKD202512250001', method: 'Scan', consignee: 'Aeon Retail Sdn Bhd', goodsTotal: 1,  skuTotal: 2, packUnit: 'Pallet', createdAt: '2026-01-09', createdBy: ''           },
@@ -147,13 +306,89 @@ const allRows: StockOutRow[] = [
   { id: 3, stockOutType: 'Transfer Out', document: 'Without Order', orderNo: '',                method: 'RFID', consignee: 'Branch Warehouse B',  goodsTotal: 20, skuTotal: 6, packUnit: 'Pallet', createdAt: '2025-11-30', createdBy: 'Operator A' },
   { id: 2, stockOutType: 'Shortage Out', document: 'Without Order', orderNo: '',                method: 'Scan', consignee: '',                   goodsTotal: 2,  skuTotal: 1, packUnit: 'Box',    createdAt: '2025-11-15', createdBy: 'Admin'      },
   { id: 1, stockOutType: 'Sales Out',    document: 'With Order',    orderNo: 'SLS-2025-0100',   method: 'Scan', consignee: 'Hero Market Sdn Bhd', goodsTotal: 50, skuTotal: 8, packUnit: 'Carton', createdAt: '2025-10-01', createdBy: 'Admin'      },
-]
+])
+
+const lineItemsMap: Record<number, LineItem[]> = {
+  6: [
+    { skuCode: 'SKU-0021', skuName: 'Palm Olein Oil (5L)',      qty: 1,  unit: 'pcs',    batchNo: 'BT-6A', expiryDate: '2027-01-01' },
+    { skuCode: 'SKU-0034', skuName: 'Corrugated Box 400×300',  qty: 12, unit: 'carton', batchNo: 'BT-6B', expiryDate: '' },
+  ],
+  5: [{ skuCode: 'SKU-0055', skuName: 'FFS Film Roll 500mm', qty: 3, unit: 'box', batchNo: 'BT-5A', expiryDate: '2026-06-30' }],
+  4: [
+    { skuCode: 'SKU-0012', skuName: 'Curry Powder (1kg bag)',  qty: 8,  unit: 'carton', batchNo: 'BT-4A', expiryDate: '2026-09-15' },
+    { skuCode: 'SKU-0019', skuName: 'Sodium Benzoate E211',   qty: 2,  unit: 'carton', batchNo: 'BT-4B', expiryDate: '2027-03-01' },
+    { skuCode: 'SKU-0034', skuName: 'Corrugated Box 400×300', qty: 2,  unit: 'carton', batchNo: 'BT-4C', expiryDate: '' },
+    { skuCode: 'SKU-0078', skuName: 'Tomato Paste (Drum)',    qty: 2,  unit: 'L',      batchNo: 'BT-4D', expiryDate: '2026-12-01' },
+  ],
+  1: [
+    { skuCode: 'SKU-0019', skuName: 'Sodium Benzoate E211',  qty: 50, unit: 'carton', batchNo: 'BT-1A', expiryDate: '2027-06-01' },
+    { skuCode: 'SKU-0021', skuName: 'Palm Olein Oil (5L)',    qty: 30, unit: 'pcs',   batchNo: 'BT-1B', expiryDate: '2027-01-15' },
+    { skuCode: 'SKU-0056', skuName: 'White Sugar (50kg bag)', qty: 20, unit: 'box',   batchNo: 'BT-1C', expiryDate: '2028-01-01' },
+  ],
+}
 
 const filteredRows = computed(() => {
   const q = activeFilter.value.toLowerCase()
-  if (!q) return [...allRows]
-  return allRows.filter(r => r.consignee.toLowerCase().includes(q))
+  if (!q) return [...rows.value]
+  return rows.value.filter(r => r.consignee.toLowerCase().includes(q))
 })
+
+// ── Detail panel ──────────────────────────────────
+type DetailMode = 'edit' | 'new' | null
+const detailMode    = ref<DetailMode>(null)
+const editForm      = ref<StockOutRow>({ id: 0, stockOutType: 'Sales Out', document: 'With Order', orderNo: '', method: 'Scan', consignee: '', goodsTotal: 0, skuTotal: 0, packUnit: '', createdAt: '', createdBy: '' })
+const editLineItems = ref<LineItem[]>([])
+
+function openEdit(row: StockOutRow) {
+  editForm.value      = { ...row }
+  editLineItems.value = JSON.parse(JSON.stringify(lineItemsMap[row.id] ?? []))
+  detailMode.value    = 'edit'
+}
+function openNew() {
+  const today = new Date().toISOString().slice(0, 10)
+  editForm.value = { id: 0, stockOutType: 'Sales Out', document: 'With Order', orderNo: '', method: 'Scan', consignee: '', goodsTotal: 0, skuTotal: 0, packUnit: '', createdAt: today, createdBy: '' }
+  editLineItems.value = []
+  detailMode.value = 'new'
+}
+function openEditSelected() {
+  const id = [...checkedIds.value][0]
+  const row = rows.value.find(r => r.id === id)
+  if (row) openEdit(row)
+}
+function closeDetail() { detailMode.value = null }
+
+function saveRecord() {
+  if (detailMode.value === 'new') {
+    const newId = Math.max(0, ...rows.value.map(r => r.id)) + 1
+    editForm.value.id = newId
+    rows.value.unshift({ ...editForm.value })
+    lineItemsMap[newId] = JSON.parse(JSON.stringify(editLineItems.value))
+  } else {
+    const idx = rows.value.findIndex(r => r.id === editForm.value.id)
+    if (idx !== -1) {
+      rows.value[idx] = { ...editForm.value }
+      lineItemsMap[editForm.value.id] = JSON.parse(JSON.stringify(editLineItems.value))
+    }
+  }
+  closeDetail()
+}
+
+function addLineItem() {
+  editLineItems.value.push({ skuCode: '', skuName: '', qty: 1, unit: 'pcs', batchNo: '', expiryDate: '' })
+}
+function removeLineItem(idx: number) { editLineItems.value.splice(idx, 1) }
+
+// ── Delete ────────────────────────────────────────
+const showDelete = ref(false)
+const deleteIds  = ref<number[]>([])
+
+function openDelete(id: number) { deleteIds.value = [id]; showDelete.value = true }
+function openDeleteSelected()   { deleteIds.value = [...checkedIds.value]; showDelete.value = true }
+function confirmDelete() {
+  rows.value = rows.value.filter(r => !deleteIds.value.includes(r.id))
+  checkedIds.value = new Set([...checkedIds.value].filter(id => !deleteIds.value.includes(id)))
+  showDelete.value = false
+}
 
 onMounted(() => { tick(); clockTimer = setInterval(tick, 1000) })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
@@ -171,7 +406,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
 @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
 
-/* ── Filter / search bar ── */
+/* ── Filter bar ── */
 .filter-bar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 6px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .fl { font-size: 10px; color: #9e9e9e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .f-search { border: 1px solid #c3c6d4; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 4px 8px; color: #515151; outline: none; height: 28px; }
@@ -185,12 +420,13 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 /* ── Action bar ── */
 .action-bar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 6px 16px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .act-btn { background: #f5f5f5; border: 1px solid #c3c6d4; border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 28px; padding: 0 12px; display: flex; align-items: center; gap: 5px; transition: background .12s; color: #515151; }
+.act-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .act-new    { background: #e8f5e9; border-color: #a5d6a7; color: #388E3C; }
-.act-new:hover    { background: #c8e6c9; }
+.act-new:hover:not(:disabled)    { background: #c8e6c9; }
 .act-edit   { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
-.act-edit:hover   { background: #bbdefb; }
+.act-edit:hover:not(:disabled)   { background: #bbdefb; }
 .act-delete { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
-.act-delete:hover { background: #ffcdd2; }
+.act-delete:hover:not(:disabled) { background: #ffcdd2; }
 .act-export { background: #fff9c4; border-color: #fdd835; color: #f9a825; }
 .act-export:hover { background: #fff59d; }
 .act-icon-btn { background: #f5f5f5; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; height: 28px; width: 28px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
@@ -212,18 +448,18 @@ td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; color: #515151; white-
 tbody tr:nth-child(even) td { background: #f9f9f9; }
 tbody tr:hover td { background: #e3f2fd !important; }
 tbody tr.row-sel td { background: #e3f2fd; }
-
-.col-chk     { width: 36px; text-align: center; }
-.col-id      { width: 48px; text-align: center; font-weight: 700; color: #515151; }
+.col-chk  { width: 36px; text-align: center; }
+.col-id   { width: 48px; text-align: center; font-weight: 700; }
 .col-actions { width: 80px; text-align: center; }
-.dash        { color: #c3c6d4; }
-
-/* ── Per-row actions ── */
+.dash { color: #c3c6d4; }
 .row-edit, .row-del { cursor: pointer; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; line-height: 1.8; }
-.row-edit { color: #1565c0; }
-.row-edit:hover { text-decoration: underline; }
-.row-del  { color: #e53935; }
-.row-del:hover  { text-decoration: underline; }
+.row-edit { color: #1565c0; } .row-edit:hover { text-decoration: underline; }
+.row-del  { color: #e53935; } .row-del:hover  { text-decoration: underline; }
+
+/* Method badges */
+.method-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.3px; }
+.badge-scan { background: #e3f2fd; color: #1565c0; }
+.badge-rfid { background: #f3e5f5; color: #7b1fa2; }
 
 /* ── Pagination ── */
 .pag-bar { background: #fff; border-top: 1px solid #c3c6d4; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -233,6 +469,86 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .pag-btn:hover:not(:disabled) { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
 .pag-active { background: #1565c0; border-color: #1565c0; color: #fff; cursor: default; }
 .pag-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
 .empty-msg { padding: 32px; text-align: center; color: #9e9e9e; font-size: 11px; }
+
+/* ── Overlay ── */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 100; }
+.overlay-fade-enter-active, .overlay-fade-leave-active { transition: opacity .2s ease; }
+.overlay-fade-enter-from, .overlay-fade-leave-to { opacity: 0; }
+
+/* ── Detail panel ── */
+.detail-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 95vw;
+  background: #fff; border-left: 1px solid #c3c6d4; z-index: 101;
+  display: flex; flex-direction: column; box-shadow: -4px 0 20px rgba(0,0,0,.12);
+}
+.panel-slide-enter-active, .panel-slide-leave-active { transition: transform .25s ease; }
+.panel-slide-enter-from, .panel-slide-leave-to { transform: translateX(100%); }
+
+.dp-header { padding: 0 16px; height: 52px; border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); }
+.dp-header-left { display: flex; align-items: center; gap: 10px; }
+.dp-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 3px; }
+.badge-edit { background: #e3f2fd; color: #1565c0; }
+.badge-new  { background: #e8f5e9; color: #388E3C; }
+.dp-title { font-size: 13px; font-weight: 700; color: #515151; }
+.dp-close { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; font-size: 13px; height: 26px; width: 26px; display: flex; align-items: center; justify-content: center; }
+.dp-close:hover { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
+
+.dp-body { flex: 1; overflow-y: auto; padding: 16px; }
+.dp-body::-webkit-scrollbar { width: 4px; }
+.dp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+
+.dp-section-title { font-size: 10px; font-weight: 700; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: space-between; }
+
+.dp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dp-field { display: flex; flex-direction: column; gap: 4px; }
+.dp-field-full { grid-column: 1 / -1; }
+.dp-field label { font-size: 10px; font-weight: 600; color: #515151; }
+.req { color: #e53935; }
+.dp-field input, .dp-field select {
+  border: 1px solid #c3c6d4; border-radius: 3px; font-family: 'Poppins', sans-serif;
+  font-size: 11px; color: #515151; padding: 5px 8px; height: 30px; outline: none; background: #fff;
+}
+.dp-field input:focus, .dp-field select:focus { border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,.1); }
+.dp-field input:disabled { background: #f5f5f5; color: #9e9e9e; }
+
+/* Line items table */
+.li-add-btn { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 3px; color: #388E3C; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 9px; font-weight: 700; height: 22px; padding: 0 8px; display: flex; align-items: center; gap: 4px; }
+.li-add-btn:hover { background: #c8e6c9; }
+.li-table-wrap { border: 1px solid #e8e8e8; border-radius: 4px; overflow: auto; max-height: 200px; }
+.li-table-wrap::-webkit-scrollbar { width: 3px; height: 3px; }
+.li-table-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+.li-table { width: 100%; border-collapse: collapse; font-size: 10px; min-width: 500px; }
+.li-table th { background: #f5f5f5; color: #9e9e9e; font-size: 9px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid #e8e8e8; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; text-align: left; }
+.li-table td { padding: 4px 4px; border-bottom: 1px solid #f0f0f0; }
+.li-input { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 10px; color: #515151; padding: 3px 6px; height: 24px; outline: none; width: 100%; }
+.li-input:focus { border-color: #1565c0; }
+.li-num { text-align: right; }
+.li-select { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 10px; color: #515151; padding: 3px 4px; height: 24px; outline: none; width: 100%; }
+.li-del-btn { background: none; border: none; color: #bdbdbd; cursor: pointer; font-size: 11px; padding: 2px 4px; border-radius: 3px; }
+.li-del-btn:hover { background: #ffebee; color: #e53935; }
+
+/* ── Panel footer ── */
+.dp-footer { padding: 10px 16px; border-top: 1px solid #c3c6d4; display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; background: #fafafa; }
+.fp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 5px; border: 1px solid transparent; }
+.fp-cancel { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
+.fp-cancel:hover { background: #e8e8e8; }
+.fp-save   { background: #1565c0; color: #fff; }
+.fp-save:hover { background: #1976d2; }
+.fp-delete { background: #e53935; color: #fff; }
+.fp-delete:hover { background: #c62828; }
+
+/* ── Delete modal ── */
+.del-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: #fff; border: 1px solid #c3c6d4; border-radius: 8px;
+  padding: 28px 24px; width: 360px; z-index: 102; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+}
+.modal-pop-enter-active, .modal-pop-leave-active { transition: all .2s ease; }
+.modal-pop-enter-from, .modal-pop-leave-to { opacity: 0; transform: translate(-50%, -48%) scale(.95); }
+.del-icon { font-size: 32px; color: #f9a825; margin-bottom: 10px; }
+.del-title { font-size: 14px; font-weight: 700; color: #515151; margin-bottom: 8px; }
+.del-msg { font-size: 11px; color: #757575; line-height: 1.6; margin-bottom: 20px; }
+.del-actions { display: flex; justify-content: center; gap: 10px; }
 </style>
