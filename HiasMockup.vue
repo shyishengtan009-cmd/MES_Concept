@@ -81,21 +81,21 @@
           <div class="nav-children-wrap" :class="{ 'nav-children--open': isOpen(menu.name) }">
             <div
               v-for="child in menu.children"
-              :key="child"
+              :key="child.name"
               class="nav-child-row"
               :class="{
-                activeNavItem: isActiveChild(child),
-                orangeBorder:  isActiveChild(child),
-                activeIcon:    isActiveChild(child)
+                activeNavItem: isActiveChild(child.name),
+                orangeBorder:  isActiveChild(child.name),
+                activeIcon:    isActiveChild(child.name)
               }"
-              @click="selectChild(child, menu.name)"
+              @click="selectChild(child.name, menu.name)"
             >
               <div
                 class="nav-icon-section"
-                :class="{ orangeBorder: isActiveChild(child), activeIcon: isActiveChild(child) }"
+                :class="{ orangeBorder: isActiveChild(child.name), activeIcon: isActiveChild(child.name) }"
               ></div>
               <div class="nav-label-section">
-                <div class="nav-label-text childInset">{{ child }}</div>
+                <div class="nav-label-text childInset">{{ child.name }}</div>
               </div>
             </div>
           </div>
@@ -147,21 +147,23 @@ const pageMap: Record<string, string> = {
   'Outgoing Records':  'inventory-outgoing',
 }
 
-const menus = [
+type MenuItem = { name: string; icon: string; children: { name: string; icon?: string }[] }
+
+const menus: MenuItem[] = [
   { name: 'Dashboard',                 icon: 'fa-solid fa-square-poll-vertical', children: [] },
-  { name: 'Document',                  icon: 'fa-solid fa-folder',               children: ['Document List', 'Document Category'] },
-  { name: 'Certification',             icon: 'fa-solid fa-folder',               children: ['Halal Certification', 'Industry Certification'] },
-  { name: 'Audit',                     icon: 'fa-solid fa-clipboard-check',      children: ['Internal Audit', 'Supplier Audit', 'Third-Party Audit'] },
-  { name: 'Non-Conformance',           icon: 'fa-solid fa-triangle-exclamation', children: ['NC List', 'NC Report'] },
-  { name: 'AI Matching',               icon: 'fa-solid fa-wand-magic-sparkles',  children: ['Smart Matching', 'Matching Settings'] },
-  { name: 'Operation',                 icon: 'fa-solid fa-briefcase',            children: ['Product', 'Raw Material', 'Manufacturing'] },
-  { name: 'Purchasing',                icon: 'fa-solid fa-file-invoice-dollar',  children: ['Supplier', 'Purchase Order'] },
-  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: ['Dashboard', 'Cost Analysis'] },
-  { name: 'Inventory',                 icon: 'fa-solid fa-boxes-stacking',       children: ['Inventory', 'Incoming Records', 'Outgoing Records'] },
-  { name: 'Collaborator',              icon: 'fa-solid fa-building',             children: ['Collaborator List', 'Collaboration Requests'] },
-  { name: 'Report',                    icon: 'fa-solid fa-list',                 children: ['Audit Report', 'Compliance Report', 'Export Report'] },
-  { name: 'Monitoring',                icon: 'fa-solid fa-eye',                  children: ['Typhoid Vaccination', 'Cold Truck Real-Time Monitoring', 'Alert'] },
-  { name: 'Human Resource',            icon: 'fa-solid fa-people-group',         children: ['Employee', 'Training', 'Competency'] },
+  { name: 'Document',                  icon: 'fa-solid fa-folder',               children: [{ name: 'Document List' }, { name: 'Document Category' }] },
+  { name: 'Certification',             icon: 'fa-solid fa-folder',               children: [{ name: 'Halal Certification' }, { name: 'Industry Certification' }] },
+  { name: 'Audit',                     icon: 'fa-solid fa-clipboard-check',      children: [{ name: 'Internal Audit' }, { name: 'Supplier Audit' }, { name: 'Third-Party Audit' }] },
+  { name: 'Non-Conformance',           icon: 'fa-solid fa-triangle-exclamation', children: [{ name: 'NC List' }, { name: 'NC Report' }] },
+  { name: 'AI Matching',               icon: 'fa-solid fa-wand-magic-sparkles',  children: [{ name: 'Smart Matching' }, { name: 'Matching Settings' }] },
+  { name: 'Operation',                 icon: 'fa-solid fa-briefcase',            children: [{ name: 'Product' }, { name: 'Raw Material' }, { name: 'Manufacturing' }] },
+  { name: 'Purchasing',                icon: 'fa-solid fa-file-invoice-dollar',  children: [{ name: 'Supplier' }, { name: 'Purchase Order' }] },
+  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: [{ name: 'Dashboard' }, { name: 'Cost Analysis' }] },
+  { name: 'Inventory',                 icon: 'fa-solid fa-warehouse',            children: [{ name: 'Inventory' }, { name: 'Incoming Records' }, { name: 'Outgoing Records' }] },
+  { name: 'Collaborator',              icon: 'fa-solid fa-building',             children: [{ name: 'Collaborator List' }, { name: 'Collaboration Requests' }] },
+  { name: 'Report',                    icon: 'fa-solid fa-list',                 children: [{ name: 'Audit Report' }, { name: 'Compliance Report' }, { name: 'Export Report' }] },
+  { name: 'Monitoring',                icon: 'fa-solid fa-eye',                  children: [{ name: 'Typhoid Vaccination' }, { name: 'Cold Truck Real-Time Monitoring' }, { name: 'Alert' }] },
+  { name: 'Human Resource',            icon: 'fa-solid fa-people-group',         children: [{ name: 'Employee' }, { name: 'Training' }, { name: 'Competency' }] },
   { name: 'Customer Voice Management', icon: 'fa-solid fa-comments',             children: [] },
   { name: 'User Management',           icon: 'fa-solid fa-user',                 children: [] },
 ]
