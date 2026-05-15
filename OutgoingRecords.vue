@@ -1,7 +1,7 @@
 <template>
   <div class="page-root">
 
-    <!-- TOPBAR -->
+    <!-- TOPBAR — always visible -->
     <div class="topbar">
       <span class="pg-title">&#9632; Outgoing Records</span>
       <div class="topbar-right">
@@ -10,257 +10,402 @@
       </div>
     </div>
 
-    <!-- SEARCH / FILTER BAR -->
-    <div class="filter-bar">
-      <span class="fl">Consignee</span>
-      <input class="f-search" type="text" placeholder="Enter consignee name" v-model="consigneeSearch" @keyup.enter="applySearch" style="margin-left:0; width:200px" />
-      <button class="f-btn-primary" @click="applySearch"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
-      <button class="f-btn-outline" @click="resetSearch"><i class="fa-solid fa-rotate-right"></i> Reset</button>
-      <span class="result-count" style="margin-left:auto">{{ filteredRows.length }} records</span>
-    </div>
+    <!-- ══════════════════════════════════════════════
+         INSPECTION VIEW  (Option C — full-screen drill-down)
+         Lift <div class="insp-body"> into a tab panel for Option B
+    ═══════════════════════════════════════════════════ -->
+    <template v-if="inspectRow !== null">
 
-    <!-- ACTION BAR -->
-    <div class="action-bar">
-      <button class="act-btn act-new"    @click="openNew()"><i class="fa-solid fa-plus"></i> New</button>
-      <button class="act-btn act-edit"   @click="openEditSelected()" :disabled="checkedIds.size !== 1"><i class="fa-regular fa-pen-to-square"></i> Edit</button>
-      <button class="act-btn act-delete" @click="openDeleteSelected()" :disabled="checkedIds.size === 0"><i class="fa-regular fa-trash-can"></i> Delete</button>
-      <button class="act-btn act-export"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
-      <button class="act-icon-btn" style="margin-left:auto" title="Column settings"><i class="fa-solid fa-magnifying-glass"></i></button>
-    </div>
-
-    <!-- TABLE PANEL -->
-    <div class="body-full">
-      <div class="pc" style="flex:1">
-        <div class="ph">
-          Stock Out Records
-          <span class="ph-r">{{ filteredRows.length }} records</span>
-        </div>
-        <div class="tbl-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th class="col-chk"><input type="checkbox" v-model="allChecked" @change="toggleAll" /></th>
-                <th class="col-id">ID</th>
-                <th style="min-width:115px">Stock Out Type</th>
-                <th style="min-width:105px">Document</th>
-                <th style="min-width:145px">Order No.</th>
-                <th style="min-width:65px">Method</th>
-                <th style="min-width:145px">Consignee</th>
-                <th style="min-width:78px;text-align:right">Goods Qty</th>
-                <th style="min-width:78px;text-align:right">SKU Count</th>
-                <th style="min-width:78px">Pack Unit</th>
-                <th style="min-width:100px">Created At</th>
-                <th style="min-width:88px">Created By</th>
-                <th class="col-actions">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in filteredRows" :key="row.id" :class="{ 'row-sel': checkedIds.has(row.id) }">
-                <td class="col-chk"><input type="checkbox" :checked="checkedIds.has(row.id)" @change="toggleRow(row.id)" /></td>
-                <td class="col-id">{{ row.id }}</td>
-                <td>{{ row.stockOutType }}</td>
-                <td>{{ row.document }}</td>
-                <td :class="{ dash: !row.orderNo }">{{ row.orderNo || '—' }}</td>
-                <td><span :class="['method-badge', row.method === 'RFID' ? 'badge-rfid' : 'badge-scan']">{{ row.method }}</span></td>
-                <td :class="{ dash: !row.consignee }">{{ row.consignee || '—' }}</td>
-                <td style="text-align:right">{{ row.goodsTotal }}</td>
-                <td style="text-align:right">{{ row.skuTotal }}</td>
-                <td :class="{ dash: !row.packUnit }">{{ row.packUnit || '—' }}</td>
-                <td>{{ row.createdAt }}</td>
-                <td :class="{ dash: !row.createdBy }">{{ row.createdBy || '—' }}</td>
-                <td class="col-actions">
-                  <div><a class="row-edit" @click.prevent="openEdit(row)"><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
-                  <div><a class="row-del"  @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
-                </td>
-              </tr>
-              <tr v-if="filteredRows.length === 0">
-                <td colspan="13" class="empty-msg">No records found.</td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- Inspection nav bar -->
+      <div class="insp-nav">
+        <button class="insp-back" @click="closeInspect">
+          <i class="fa-solid fa-chevron-left"></i> Outgoing Records
+        </button>
+        <span class="insp-sep">›</span>
+        <span class="insp-nav-title">Dispatch Inspection — Stock Out #{{ inspectRow.id }}</span>
+        <span :class="['isc', 'isc--' + (inspForm.status)]" style="margin-left:10px">{{ inspStatusLabel }}</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <button class="insp-close-btn" @click="closeInspect" title="Close without saving">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
       </div>
-    </div>
 
-    <!-- PAGINATION -->
-    <div class="pag-bar">
-      <span class="pag-info">Total {{ filteredRows.length }} records</span>
-      <div class="pag-pages">
-        <button class="pag-btn" disabled>&lt;</button>
-        <button class="pag-btn pag-active">1</button>
-        <button class="pag-btn">&gt;</button>
-      </div>
-    </div>
+      <!-- ── Inspection body — lift this block for Option B tab ── -->
+      <div class="insp-body">
 
-    <!-- ── DETAIL PANEL OVERLAY ── -->
-    <transition name="overlay-fade">
-      <div v-if="detailMode !== null" class="overlay" @click.self="closeDetail"></div>
-    </transition>
-    <transition name="panel-slide">
-      <div v-if="detailMode !== null" class="detail-panel">
-
-        <!-- Panel header -->
-        <div class="dp-header">
-          <div class="dp-header-left">
-            <span class="dp-badge" :class="detailMode === 'new' ? 'badge-new' : 'badge-edit'">
-              {{ detailMode === 'new' ? 'NEW RECORD' : 'EDIT RECORD' }}
-            </span>
-            <span class="dp-title">{{ detailMode === 'new' ? 'Stock Out — New Entry' : `Stock Out #${editForm.id}` }}</span>
+        <!-- Record Summary -->
+        <div class="insp-card">
+          <div class="insp-card-title">Record Summary</div>
+          <div class="insp-summary-grid">
+            <div class="is-field"><span class="is-label">Stock Out Type</span><span class="is-val">{{ inspectRow.stockOutType }}</span></div>
+            <div class="is-field"><span class="is-label">Document</span><span class="is-val">{{ inspectRow.document }}</span></div>
+            <div class="is-field"><span class="is-label">Order No.</span><span class="is-val">{{ inspectRow.orderNo || '—' }}</span></div>
+            <div class="is-field"><span class="is-label">Method</span>
+              <span :class="['method-badge', inspectRow.method === 'RFID' ? 'badge-rfid' : 'badge-scan']">{{ inspectRow.method }}</span>
+            </div>
+            <div class="is-field"><span class="is-label">Consignee</span><span class="is-val">{{ inspectRow.consignee || '—' }}</span></div>
+            <div class="is-field"><span class="is-label">Goods Qty</span><span class="is-val">{{ inspectRow.goodsTotal }}</span></div>
+            <div class="is-field"><span class="is-label">SKU Count</span><span class="is-val">{{ inspectRow.skuTotal }}</span></div>
+            <div class="is-field"><span class="is-label">Pack Unit</span><span class="is-val">{{ inspectRow.packUnit || '—' }}</span></div>
           </div>
-          <button class="dp-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
-        <!-- Scrollable body -->
-        <div class="dp-body">
-
-          <!-- Section: Record Info -->
-          <div class="dp-section-title">Record Information</div>
-          <div class="dp-grid">
-            <div class="dp-field">
-              <label>Stock Out Type <span class="req">*</span></label>
-              <select v-model="editForm.stockOutType">
-                <option>Sales Out</option>
-                <option>Transfer Out</option>
-                <option>Return Out</option>
-                <option>Shortage Out</option>
-              </select>
-            </div>
-            <div class="dp-field">
-              <label>Document Type <span class="req">*</span></label>
-              <select v-model="editForm.document">
-                <option>With Order</option>
-                <option>Without Order</option>
-              </select>
-            </div>
-            <div class="dp-field">
-              <label>Order No.</label>
-              <input type="text" v-model="editForm.orderNo" placeholder="e.g. SLS-2026-0001" :disabled="editForm.document === 'Without Order'" />
-            </div>
-            <div class="dp-field">
-              <label>Method <span class="req">*</span></label>
-              <select v-model="editForm.method">
-                <option>Scan</option>
-                <option>RFID</option>
-              </select>
-            </div>
-            <div class="dp-field dp-field-full">
-              <label>Consignee</label>
-              <input type="text" v-model="editForm.consignee" placeholder="Enter consignee name" />
-            </div>
+        <!-- Dispatch Checklist -->
+        <div class="insp-card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <div class="insp-card-title">
+            Dispatch Checklist
+            <span class="insp-card-hint">Verify each line item before dispatch</span>
           </div>
-
-          <!-- Section: Quantity & Packaging -->
-          <div class="dp-section-title" style="margin-top:16px">Quantity & Packaging</div>
-          <div class="dp-grid">
-            <div class="dp-field">
-              <label>Goods Qty</label>
-              <input type="number" v-model.number="editForm.goodsTotal" min="0" />
-            </div>
-            <div class="dp-field">
-              <label>SKU Count</label>
-              <input type="number" v-model.number="editForm.skuTotal" min="0" />
-            </div>
-            <div class="dp-field">
-              <label>Pack Unit</label>
-              <select v-model="editForm.packUnit">
-                <option value="">— None —</option>
-                <option>Box</option>
-                <option>Carton</option>
-                <option>Pallet</option>
-                <option>Bag</option>
-                <option>Drum</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Section: Line Items -->
-          <div class="dp-section-title" style="margin-top:16px">
-            Line Items
-            <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
-          </div>
-          <div class="li-table-wrap">
-            <table class="li-table">
+          <div class="lc-wrap">
+            <table class="lc-table">
               <thead>
                 <tr>
                   <th style="min-width:90px">SKU Code</th>
                   <th style="min-width:140px">SKU Name</th>
-                  <th style="min-width:55px;text-align:right">Qty</th>
-                  <th style="min-width:55px">Unit</th>
-                  <th style="min-width:90px">Batch No.</th>
-                  <th style="min-width:90px">Expiry</th>
-                  <th style="width:32px"></th>
+                  <th style="min-width:70px;text-align:right">Order Qty</th>
+                  <th style="min-width:80px;text-align:right">Dispatched Qty</th>
+                  <th style="min-width:110px">Packaging</th>
+                  <th style="min-width:70px;text-align:center">Halal Label</th>
+                  <th style="min-width:75px;text-align:center">Expiry Valid</th>
+                  <th style="min-width:160px">Notes</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(li, idx) in editLineItems" :key="idx">
-                  <td><input class="li-input" v-model="li.skuCode" placeholder="SKU-001" /></td>
-                  <td><input class="li-input" v-model="li.skuName" placeholder="Product name" /></td>
-                  <td><input class="li-input li-num" type="number" v-model.number="li.qty" min="0" /></td>
+                <tr v-for="(lc, idx) in inspLineChecks" :key="idx" :class="lcRowClass(lc)">
+                  <td class="lc-ro">{{ lc.skuCode }}</td>
+                  <td class="lc-ro">{{ lc.skuName }}</td>
+                  <td class="lc-ro" style="text-align:right">{{ lc.orderQty }}</td>
+                  <td style="text-align:right">
+                    <input class="lc-input lc-num" type="number" v-model.number="lc.dispatchedQty" min="0" />
+                  </td>
                   <td>
-                    <select class="li-select" v-model="li.unit">
-                      <option>pcs</option><option>kg</option><option>L</option><option>box</option><option>carton</option>
+                    <select class="lc-select" v-model="lc.packaging">
+                      <option>Intact</option>
+                      <option>Damaged</option>
+                      <option>Repackaged</option>
                     </select>
                   </td>
-                  <td><input class="li-input" v-model="li.batchNo" placeholder="BT-001" /></td>
-                  <td><input class="li-input" type="date" v-model="li.expiryDate" /></td>
-                  <td><button class="li-del-btn" @click="removeLineItem(idx)" title="Remove"><i class="fa-solid fa-xmark"></i></button></td>
+                  <td style="text-align:center">
+                    <input type="checkbox" v-model="lc.halalLabel" />
+                  </td>
+                  <td style="text-align:center">
+                    <input type="checkbox" v-model="lc.expiryValid" />
+                  </td>
+                  <td>
+                    <input class="lc-input" type="text" v-model="lc.notes" placeholder="Remarks…" />
+                  </td>
                 </tr>
-                <tr v-if="editLineItems.length === 0">
-                  <td colspan="7" style="text-align:center;color:#9e9e9e;font-size:10px;padding:12px">No line items. Click + Add SKU to add one.</td>
+                <tr v-if="inspLineChecks.length === 0">
+                  <td colspan="8" style="text-align:center;color:#9e9e9e;font-size:10px;padding:16px">No line items on this record.</td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </div>
 
-          <!-- Section: Meta -->
-          <div class="dp-section-title" style="margin-top:16px">Record Meta</div>
-          <div class="dp-grid">
+        <!-- Sign-off -->
+        <div class="insp-card">
+          <div class="insp-card-title">Dispatch Sign-off</div>
+          <div class="insp-signoff-grid">
             <div class="dp-field">
-              <label>Created At</label>
-              <input type="date" v-model="editForm.createdAt" />
+              <label>Inspector Name <span class="req">*</span></label>
+              <input type="text" v-model="inspForm.inspector" placeholder="Full name" />
             </div>
             <div class="dp-field">
-              <label>Created By</label>
-              <input type="text" v-model="editForm.createdBy" placeholder="Operator name" />
+              <label>Dispatch Date</label>
+              <input type="date" v-model="inspForm.dispatchedAt" />
+            </div>
+            <div class="dp-field" style="grid-column:1/-1">
+              <label>Remarks</label>
+              <input type="text" v-model="inspForm.remarks" placeholder="Overall dispatch remarks…" />
             </div>
           </div>
-
-        </div><!-- /dp-body -->
-
-        <!-- Panel footer -->
-        <div class="dp-footer">
-          <button class="fp-btn fp-cancel" @click="closeDetail"><i class="fa-solid fa-xmark"></i> Cancel</button>
-          <button class="fp-btn fp-save" @click="saveRecord"><i class="fa-solid fa-floppy-disk"></i> {{ detailMode === 'new' ? 'Create' : 'Save Changes' }}</button>
         </div>
 
-      </div>
-    </transition>
+      </div><!-- /insp-body -->
 
-    <!-- ── DELETE CONFIRM MODAL ── -->
-    <transition name="overlay-fade">
-      <div v-if="showDelete" class="overlay" @click.self="showDelete = false"></div>
-    </transition>
-    <transition name="modal-pop">
-      <div v-if="showDelete" class="del-modal">
-        <div class="del-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <div class="del-title">Delete {{ deleteIds.length > 1 ? deleteIds.length + ' Records' : 'Record' }}?</div>
-        <div class="del-msg">
-          This will permanently remove
-          <strong>{{ deleteIds.length > 1 ? deleteIds.length + ' stock out records' : 'stock out record #' + deleteIds[0] }}</strong>.
-          This action cannot be undone.
-        </div>
-        <div class="del-actions">
-          <button class="fp-btn fp-cancel" @click="showDelete = false">Cancel</button>
-          <button class="fp-btn fp-delete" @click="confirmDelete"><i class="fa-regular fa-trash-can"></i> Delete</button>
+      <!-- Inspection footer -->
+      <div class="insp-footer">
+        <button class="ifp-btn ifp-back"    @click="submitInspection('pending')">
+          <i class="fa-solid fa-rotate-left"></i> Send Back
+        </button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="ifp-btn ifp-reject"  @click="submitInspection('failed')">
+            <i class="fa-solid fa-circle-xmark"></i> Reject
+          </button>
+          <button class="ifp-btn ifp-approve" @click="submitInspection('passed')">
+            <i class="fa-solid fa-circle-check"></i> Approve
+          </button>
         </div>
       </div>
-    </transition>
+
+    </template>
+
+    <!-- ══════════════════════════════════════════════
+         LIST VIEW
+    ═══════════════════════════════════════════════════ -->
+    <template v-else>
+
+      <!-- SEARCH / FILTER BAR -->
+      <div class="filter-bar">
+        <span class="fl">Consignee</span>
+        <input class="f-search" type="text" placeholder="Enter consignee name" v-model="consigneeSearch" @keyup.enter="applySearch" style="margin-left:0; width:200px" />
+        <button class="f-btn-primary" @click="applySearch"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+        <button class="f-btn-outline" @click="resetSearch"><i class="fa-solid fa-rotate-right"></i> Reset</button>
+        <span class="result-count" style="margin-left:auto">{{ filteredRows.length }} records</span>
+      </div>
+
+      <!-- ACTION BAR -->
+      <div class="action-bar">
+        <button class="act-btn act-new"    @click="openNew()"><i class="fa-solid fa-plus"></i> New</button>
+        <button class="act-btn act-edit"   @click="openEditSelected()" :disabled="checkedIds.size !== 1"><i class="fa-regular fa-pen-to-square"></i> Edit</button>
+        <button class="act-btn act-delete" @click="openDeleteSelected()" :disabled="checkedIds.size === 0"><i class="fa-regular fa-trash-can"></i> Delete</button>
+        <button class="act-btn act-export"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
+        <button class="act-icon-btn" style="margin-left:auto" title="Column settings"><i class="fa-solid fa-magnifying-glass"></i></button>
+      </div>
+
+      <!-- TABLE PANEL -->
+      <div class="body-full">
+        <div class="pc" style="flex:1">
+          <div class="ph">
+            Stock Out Records
+            <span class="ph-r">{{ filteredRows.length }} records</span>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-chk"><input type="checkbox" v-model="allChecked" @change="toggleAll" /></th>
+                  <th class="col-id">ID</th>
+                  <th style="min-width:115px">Stock Out Type</th>
+                  <th style="min-width:105px">Document</th>
+                  <th style="min-width:145px">Order No.</th>
+                  <th style="min-width:65px">Method</th>
+                  <th style="min-width:145px">Consignee</th>
+                  <th style="min-width:78px;text-align:right">Goods Qty</th>
+                  <th style="min-width:78px;text-align:right">SKU Count</th>
+                  <th style="min-width:78px">Pack Unit</th>
+                  <th style="min-width:100px">Created At</th>
+                  <th style="min-width:88px">Created By</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in filteredRows" :key="row.id"
+                    :class="{ 'row-sel': checkedIds.has(row.id) }"
+                    class="row-clickable"
+                    @click="openInspect(row)">
+                  <td class="col-chk" @click.stop><input type="checkbox" :checked="checkedIds.has(row.id)" @change="toggleRow(row.id)" /></td>
+                  <td class="col-id">
+                    {{ row.id }}
+                    <span v-if="inspectionMap[row.id]" :class="['insp-dot', 'idot--' + inspectionMap[row.id]!.status]" :title="inspectionMap[row.id]!.status"></span>
+                  </td>
+                  <td>{{ row.stockOutType }}</td>
+                  <td>{{ row.document }}</td>
+                  <td :class="{ dash: !row.orderNo }">{{ row.orderNo || '—' }}</td>
+                  <td><span :class="['method-badge', row.method === 'RFID' ? 'badge-rfid' : 'badge-scan']">{{ row.method }}</span></td>
+                  <td :class="{ dash: !row.consignee }">{{ row.consignee || '—' }}</td>
+                  <td style="text-align:right">{{ row.goodsTotal }}</td>
+                  <td style="text-align:right">{{ row.skuTotal }}</td>
+                  <td :class="{ dash: !row.packUnit }">{{ row.packUnit || '—' }}</td>
+                  <td>{{ row.createdAt }}</td>
+                  <td :class="{ dash: !row.createdBy }">{{ row.createdBy || '—' }}</td>
+                  <td class="col-actions" @click.stop>
+                    <div><a class="row-edit" @click.prevent="openEdit(row)"><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
+                    <div><a class="row-del"  @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
+                  </td>
+                </tr>
+                <tr v-if="filteredRows.length === 0">
+                  <td colspan="13" class="empty-msg">No records found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGINATION -->
+      <div class="pag-bar">
+        <span class="pag-info">Total {{ filteredRows.length }} records</span>
+        <div class="pag-pages">
+          <button class="pag-btn" disabled>&lt;</button>
+          <button class="pag-btn pag-active">1</button>
+          <button class="pag-btn">&gt;</button>
+        </div>
+      </div>
+
+      <!-- ── DETAIL PANEL OVERLAY ── -->
+      <transition name="overlay-fade">
+        <div v-if="detailMode !== null" class="overlay" @click.self="closeDetail"></div>
+      </transition>
+      <transition name="panel-slide">
+        <div v-if="detailMode !== null" class="detail-panel">
+
+          <!-- Panel header -->
+          <div class="dp-header">
+            <div class="dp-header-left">
+              <span class="dp-badge" :class="detailMode === 'new' ? 'badge-new' : 'badge-edit'">
+                {{ detailMode === 'new' ? 'NEW RECORD' : 'EDIT RECORD' }}
+              </span>
+              <span class="dp-title">{{ detailMode === 'new' ? 'Stock Out — New Entry' : `Stock Out #${editForm.id}` }}</span>
+            </div>
+            <button class="dp-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+
+          <!-- Scrollable body -->
+          <div class="dp-body">
+
+            <!-- Section: Record Info -->
+            <div class="dp-section-title">Record Information</div>
+            <div class="dp-grid">
+              <div class="dp-field">
+                <label>Stock Out Type <span class="req">*</span></label>
+                <select v-model="editForm.stockOutType">
+                  <option>Sales Out</option>
+                  <option>Transfer Out</option>
+                  <option>Return Out</option>
+                  <option>Shortage Out</option>
+                </select>
+              </div>
+              <div class="dp-field">
+                <label>Document Type <span class="req">*</span></label>
+                <select v-model="editForm.document">
+                  <option>With Order</option>
+                  <option>Without Order</option>
+                </select>
+              </div>
+              <div class="dp-field">
+                <label>Order No.</label>
+                <input type="text" v-model="editForm.orderNo" placeholder="e.g. SLS-2026-0001" :disabled="editForm.document === 'Without Order'" />
+              </div>
+              <div class="dp-field">
+                <label>Method <span class="req">*</span></label>
+                <select v-model="editForm.method">
+                  <option>Scan</option>
+                  <option>RFID</option>
+                </select>
+              </div>
+              <div class="dp-field dp-field-full">
+                <label>Consignee</label>
+                <input type="text" v-model="editForm.consignee" placeholder="Enter consignee name" />
+              </div>
+            </div>
+
+            <!-- Section: Quantity & Packaging -->
+            <div class="dp-section-title" style="margin-top:16px">Quantity & Packaging</div>
+            <div class="dp-grid">
+              <div class="dp-field">
+                <label>Goods Qty</label>
+                <input type="number" v-model.number="editForm.goodsTotal" min="0" />
+              </div>
+              <div class="dp-field">
+                <label>SKU Count</label>
+                <input type="number" v-model.number="editForm.skuTotal" min="0" />
+              </div>
+              <div class="dp-field">
+                <label>Pack Unit</label>
+                <select v-model="editForm.packUnit">
+                  <option value="">— None —</option>
+                  <option>Box</option>
+                  <option>Carton</option>
+                  <option>Pallet</option>
+                  <option>Bag</option>
+                  <option>Drum</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Section: Line Items -->
+            <div class="dp-section-title" style="margin-top:16px">
+              Line Items
+              <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
+            </div>
+            <div class="li-table-wrap">
+              <table class="li-table">
+                <thead>
+                  <tr>
+                    <th style="min-width:90px">SKU Code</th>
+                    <th style="min-width:140px">SKU Name</th>
+                    <th style="min-width:55px;text-align:right">Qty</th>
+                    <th style="min-width:55px">Unit</th>
+                    <th style="min-width:90px">Batch No.</th>
+                    <th style="min-width:90px">Expiry</th>
+                    <th style="width:32px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(li, idx) in editLineItems" :key="idx">
+                    <td><input class="li-input" v-model="li.skuCode" placeholder="SKU-001" /></td>
+                    <td><input class="li-input" v-model="li.skuName" placeholder="Product name" /></td>
+                    <td><input class="li-input li-num" type="number" v-model.number="li.qty" min="0" /></td>
+                    <td>
+                      <select class="li-select" v-model="li.unit">
+                        <option>pcs</option><option>kg</option><option>L</option><option>box</option><option>carton</option>
+                      </select>
+                    </td>
+                    <td><input class="li-input" v-model="li.batchNo" placeholder="BT-001" /></td>
+                    <td><input class="li-input" type="date" v-model="li.expiryDate" /></td>
+                    <td><button class="li-del-btn" @click="removeLineItem(idx)" title="Remove"><i class="fa-solid fa-xmark"></i></button></td>
+                  </tr>
+                  <tr v-if="editLineItems.length === 0">
+                    <td colspan="7" style="text-align:center;color:#9e9e9e;font-size:10px;padding:12px">No line items. Click + Add SKU to add one.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Section: Meta -->
+            <div class="dp-section-title" style="margin-top:16px">Record Meta</div>
+            <div class="dp-grid">
+              <div class="dp-field">
+                <label>Created At</label>
+                <input type="date" v-model="editForm.createdAt" />
+              </div>
+              <div class="dp-field">
+                <label>Created By</label>
+                <input type="text" v-model="editForm.createdBy" placeholder="Operator name" />
+              </div>
+            </div>
+
+          </div><!-- /dp-body -->
+
+          <!-- Panel footer -->
+          <div class="dp-footer">
+            <button class="fp-btn fp-cancel" @click="closeDetail"><i class="fa-solid fa-xmark"></i> Cancel</button>
+            <button class="fp-btn fp-save" @click="saveRecord"><i class="fa-solid fa-floppy-disk"></i> {{ detailMode === 'new' ? 'Create' : 'Save Changes' }}</button>
+          </div>
+
+        </div>
+      </transition>
+
+      <!-- ── DELETE CONFIRM MODAL ── -->
+      <transition name="overlay-fade">
+        <div v-if="showDelete" class="overlay" @click.self="showDelete = false"></div>
+      </transition>
+      <transition name="modal-pop">
+        <div v-if="showDelete" class="del-modal">
+          <div class="del-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="del-title">Delete {{ deleteIds.length > 1 ? deleteIds.length + ' Records' : 'Record' }}?</div>
+          <div class="del-msg">
+            This will permanently remove
+            <strong>{{ deleteIds.length > 1 ? deleteIds.length + ' stock out records' : 'stock out record #' + deleteIds[0] }}</strong>.
+            This action cannot be undone.
+          </div>
+          <div class="del-actions">
+            <button class="fp-btn fp-cancel" @click="showDelete = false">Cancel</button>
+            <button class="fp-btn fp-delete" @click="confirmDelete"><i class="fa-regular fa-trash-can"></i> Delete</button>
+          </div>
+        </div>
+      </transition>
+
+    </template>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 
 const clock           = ref('')
 const consigneeSearch = ref('')
@@ -332,6 +477,76 @@ const filteredRows = computed(() => {
   if (!q) return [...rows.value]
   return rows.value.filter(r => r.consignee.toLowerCase().includes(q))
 })
+
+// ── Inspection ────────────────────────────────────
+interface InspLineCheck {
+  skuCode: string; skuName: string; orderQty: number; dispatchedQty: number
+  packaging: 'Intact' | 'Damaged' | 'Repackaged'; halalLabel: boolean; expiryValid: boolean; notes: string
+}
+interface InspectionData {
+  status: 'pending' | 'in_progress' | 'passed' | 'failed'
+  inspector: string; dispatchedAt: string; remarks: string; lineChecks: InspLineCheck[]
+}
+
+const inspectRow    = ref<StockOutRow | null>(null)
+const inspLineChecks = ref<InspLineCheck[]>([])
+const inspForm      = ref<InspectionData>({ status: 'in_progress', inspector: '', dispatchedAt: '', remarks: '', lineChecks: [] })
+const inspectionMap = reactive<Record<number, InspectionData>>({})
+
+const inspStatusLabel = computed(() => {
+  const map: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', passed: 'Approved', failed: 'Rejected' }
+  return map[inspForm.value.status] ?? inspForm.value.status
+})
+
+function buildLineChecks(row: StockOutRow): InspLineCheck[] {
+  const items = lineItemsMap[row.id]
+  if (items && items.length > 0) {
+    return items.map(li => ({
+      skuCode: li.skuCode, skuName: li.skuName,
+      orderQty: li.qty, dispatchedQty: li.qty,
+      packaging: 'Intact', halalLabel: true, expiryValid: true, notes: '',
+    }))
+  }
+  return [{
+    skuCode: '—', skuName: row.stockOutType,
+    orderQty: row.goodsTotal, dispatchedQty: row.goodsTotal,
+    packaging: 'Intact', halalLabel: true, expiryValid: true, notes: '',
+  }]
+}
+
+function openInspect(row: StockOutRow) {
+  closeDetail()
+  inspectRow.value = row
+  const existing = inspectionMap[row.id]
+  if (existing) {
+    inspLineChecks.value = JSON.parse(JSON.stringify(existing.lineChecks))
+    inspForm.value = { ...existing, status: existing.status === 'pending' ? 'in_progress' : existing.status, lineChecks: [] }
+  } else {
+    inspLineChecks.value = buildLineChecks(row)
+    inspForm.value = {
+      status: 'in_progress', inspector: '', dispatchedAt: new Date().toISOString().slice(0, 10), remarks: '', lineChecks: [],
+    }
+  }
+}
+
+function closeInspect() { inspectRow.value = null }
+
+function submitInspection(status: InspectionData['status']) {
+  if (!inspectRow.value) return
+  const saved: InspectionData = {
+    ...JSON.parse(JSON.stringify(inspForm.value)),
+    status,
+    lineChecks: JSON.parse(JSON.stringify(inspLineChecks.value)),
+  }
+  inspectionMap[inspectRow.value.id] = saved
+  closeInspect()
+}
+
+function lcRowClass(lc: InspLineCheck): string {
+  if (lc.packaging !== 'Intact' || !lc.halalLabel) return 'lc-rejected'
+  if (!lc.expiryValid || lc.dispatchedQty < lc.orderQty) return 'lc-warn'
+  return ''
+}
 
 // ── Detail panel ──────────────────────────────────
 type DetailMode = 'edit' | 'new' | null
@@ -448,8 +663,9 @@ td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; color: #515151; white-
 tbody tr:nth-child(even) td { background: #f9f9f9; }
 tbody tr:hover td { background: #e3f2fd !important; }
 tbody tr.row-sel td { background: #e3f2fd; }
+.row-clickable { cursor: pointer; }
 .col-chk  { width: 36px; text-align: center; }
-.col-id   { width: 48px; text-align: center; font-weight: 700; }
+.col-id   { width: 56px; text-align: center; font-weight: 700; }
 .col-actions { width: 80px; text-align: center; }
 .dash { color: #c3c6d4; }
 .row-edit, .row-del { cursor: pointer; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; line-height: 1.8; }
@@ -460,6 +676,13 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .method-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.3px; }
 .badge-scan { background: #e3f2fd; color: #1565c0; }
 .badge-rfid { background: #f3e5f5; color: #7b1fa2; }
+
+/* Inspection status dot (in ID cell) */
+.insp-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 5px; vertical-align: middle; }
+.idot--pending     { background: #9e9e9e; }
+.idot--in_progress { background: #f9a825; }
+.idot--passed      { background: #43a047; }
+.idot--failed      { background: #e53935; }
 
 /* ── Pagination ── */
 .pag-bar { background: #fff; border-top: 1px solid #c3c6d4; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -551,4 +774,84 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .del-title { font-size: 14px; font-weight: 700; color: #515151; margin-bottom: 8px; }
 .del-msg { font-size: 11px; color: #757575; line-height: 1.6; margin-bottom: 20px; }
 .del-actions { display: flex; justify-content: center; gap: 10px; }
+
+/* ══════════════════════════════════════════════════
+   INSPECTION VIEW STYLES
+══════════════════════════════════════════════════ */
+
+/* Nav bar */
+.insp-nav {
+  background: #fff; border-bottom: 1px solid #c3c6d4; padding: 0 16px;
+  height: 42px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.insp-back { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #1565c0; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 26px; padding: 0 10px; display: flex; align-items: center; gap: 5px; }
+.insp-back:hover { background: #e3f2fd; }
+.insp-sep { color: #9e9e9e; font-size: 12px; }
+.insp-nav-title { font-size: 12px; font-weight: 700; color: #515151; }
+.insp-close-btn { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; font-size: 13px; height: 26px; width: 26px; display: flex; align-items: center; justify-content: center; }
+.insp-close-btn:hover { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
+
+/* Status chip */
+.isc { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+.isc--pending     { background: #f5f5f5; color: #757575; border: 1px solid #bdbdbd; }
+.isc--in_progress { background: #fff9c4; color: #f57f17; border: 1px solid #f9a825; }
+.isc--passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.isc--failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+
+/* Body */
+.insp-body {
+  flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0;
+}
+.insp-body::-webkit-scrollbar { width: 4px; }
+.insp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+
+/* Cards */
+.insp-card { background: #fff; border: 1px solid #c3c6d4; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+.insp-card:last-child { flex-shrink: 0; }
+.insp-card-title {
+  padding: 8px 12px; font-size: 10px; font-weight: 700; color: #515151; text-transform: uppercase;
+  letter-spacing: 0.4px; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%);
+  border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between;
+}
+.insp-card-hint { font-size: 10px; font-weight: 400; color: #9e9e9e; text-transform: none; letter-spacing: 0; }
+
+/* Summary grid */
+.insp-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.is-field { padding: 8px 12px; border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; }
+.is-field:nth-child(4n) { border-right: none; }
+.is-label { display: block; font-size: 9px; font-weight: 700; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+.is-val { font-size: 12px; font-weight: 600; color: #515151; }
+
+/* Checklist table */
+.lc-wrap { overflow: auto; flex: 1; min-height: 120px; }
+.lc-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
+.lc-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+.lc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.lc-table th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
+.lc-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.lc-ro { color: #757575; font-size: 11px; white-space: nowrap; }
+.lc-input { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 3px 6px; height: 26px; outline: none; width: 100%; min-width: 60px; }
+.lc-input:focus { border-color: #1565c0; }
+.lc-num { text-align: right; }
+.lc-select { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 3px 6px; height: 26px; outline: none; width: 100%; }
+.lc-rejected td { background: #fff8f8 !important; }
+.lc-warn     td { background: #fffde7 !important; }
+
+/* Sign-off grid */
+.insp-signoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 12px; }
+
+/* Footer */
+.insp-footer {
+  background: #fff; border-top: 1px solid #c3c6d4; padding: 10px 16px;
+  display: flex; align-items: center; flex-shrink: 0;
+  box-shadow: 0 -1px 4px rgba(0,0,0,.06);
+}
+.ifp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+.ifp-back    { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
+.ifp-back:hover { background: #e8e8e8; }
+.ifp-reject  { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
+.ifp-reject:hover { background: #ffcdd2; }
+.ifp-approve { background: #1565c0; color: #fff; }
+.ifp-approve:hover { background: #1976d2; }
 </style>
