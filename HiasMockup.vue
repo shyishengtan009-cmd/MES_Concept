@@ -109,6 +109,7 @@
         <CostAnalysis     v-if="currentPage === 'cost-analysis'"      />
         <IncomingRecords  v-if="currentPage === 'inventory-incoming'" />
         <OutgoingRecords  v-if="currentPage === 'inventory-outgoing'" />
+        <ProductionMain   v-if="currentPage === 'production'"         />
       </div>
 
     </div><!-- /.hias-body -->
@@ -128,6 +129,7 @@ import Inventory        from './Inventory.vue'
 import CostAnalysis     from './CostAnalysis.vue'
 import IncomingRecords  from './IncomingRecords.vue'
 import OutgoingRecords  from './OutgoingRecords.vue'
+import ProductionMain   from './ProductionMain.vue'
 
 const corporateFareSVG = `<svg xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="23px" viewBox="0 0 24 24" width="23px"><rect fill="none" height="24" width="24"/><path fill="currentColor" d="M12,7V3H2v18h20V7H12z M10,19H4v-2h6V19z M10,15H4v-2h6V15z M10,11H4V9h6V11z M10,7H4V5h6V7z M20,19h-8V9h8V19z M18,11h-4v2h4V11z M18,15h-4v2h4V15z"/></svg>`
 const userAvatarSVG    = `<svg width="24px" height="24px" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`
@@ -145,6 +147,7 @@ const pageMap: Record<string, string> = {
   'Inventory':         'inventory',
   'Incoming Records':  'inventory-incoming',
   'Outgoing Records':  'inventory-outgoing',
+  'Production':        'production',
 }
 
 type MenuItem = { name: string; icon: string; children: { name: string; icon?: string }[] }
@@ -158,7 +161,7 @@ const menus: MenuItem[] = [
   { name: 'AI Matching',               icon: 'fa-solid fa-wand-magic-sparkles',  children: [{ name: 'Smart Matching' }, { name: 'Matching Settings' }] },
   { name: 'Operation',                 icon: 'fa-solid fa-briefcase',            children: [{ name: 'Product' }, { name: 'Raw Material' }, { name: 'Manufacturing' }] },
   { name: 'Purchasing',                icon: 'fa-solid fa-file-invoice-dollar',  children: [{ name: 'Supplier' }, { name: 'Purchase Order' }] },
-  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: [{ name: 'Dashboard' }, { name: 'Cost Analysis' }] },
+  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: [{ name: 'Dashboard' }, { name: 'Cost Analysis' }, { name: 'Production' }] },
   { name: 'Inventory',                 icon: 'fa-solid fa-warehouse',            children: [{ name: 'Inventory' }, { name: 'Incoming Records' }, { name: 'Outgoing Records' }] },
   { name: 'Collaborator',              icon: 'fa-solid fa-building',             children: [{ name: 'Collaborator List' }, { name: 'Collaboration Requests' }] },
   { name: 'Report',                    icon: 'fa-solid fa-list',                 children: [{ name: 'Audit Report' }, { name: 'Compliance Report' }, { name: 'Export Report' }] },
