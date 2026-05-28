@@ -27,7 +27,7 @@
         </span>
       </div>
 
-      <!-- ── Inspection content (lift this block for Option B tab) ── -->
+      <!-- ── Inspection content ── -->
       <div class="insp-body">
 
         <!-- Record Summary -->
@@ -50,6 +50,9 @@
           <div class="insp-card-title">
             Inspection Checklist
             <span class="insp-card-sub">Verify each line item against the delivery note</span>
+            <span v-if="hasTempSensitive" class="temp-notice">
+              <i class="fa-solid fa-temperature-half"></i> Temperature-sensitive items detected — core temp required
+            </span>
           </div>
           <div class="insp-tbl-wrap">
             <table class="insp-tbl">
@@ -58,17 +61,24 @@
                   <th>SKU Code</th>
                   <th style="min-width:130px">SKU Name</th>
                   <th style="text-align:right;min-width:68px">Expected</th>
-                  <th style="text-align:right;min-width:80px">Verified Qty</th>
-                  <th style="min-width:110px">Condition</th>
-                  <th style="text-align:center;min-width:72px">Halal Label</th>
-                  <th style="text-align:center;min-width:68px">Expiry OK</th>
+                  <th style="text-align:right;min-width:80px">Verified Qty <span class="qc-col-dot" title="Less than expected triggers a warning"></span></th>
+                  <th style="min-width:110px">Condition <span class="qc-col-dot" title="Rejected = hard fail · Damaged = warning"></span></th>
+                  <th style="text-align:center;min-width:72px">Halal Label <span class="qc-col-dot" title="Unchecked = hard fail (compliance breach)"></span></th>
+                  <th style="text-align:center;min-width:68px">Expiry OK <span class="qc-col-dot" title="Unchecked = QC failure (expired goods)"></span></th>
+                  <th v-if="hasTempSensitive" style="min-width:120px">Core Temp (°C) <span class="qc-col-dot" title="Outside acceptable range = food safety fail"></span></th>
                   <th style="min-width:120px">Notes</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(lc, idx) in inspectionForm.lineChecks" :key="idx" :class="lcRowClass(lc)">
+                <tr v-for="(lc, idx) in inspectionForm.lineChecks" :key="idx"
+                    :class="[lcRowClass(lc), { 'lc-temp-fail': lc.isTempSensitive && isTempFail(lc) }]">
                   <td class="ic-ro">{{ lc.skuCode || '—' }}</td>
-                  <td class="ic-ro">{{ lc.skuName || '—' }}</td>
+                  <td class="ic-ro">
+                    {{ lc.skuName || '—' }}
+                    <span v-if="lc.isTempSensitive" class="temp-tag">
+                      <i class="fa-solid fa-temperature-half"></i> Temp-sensitive
+                    </span>
+                  </td>
                   <td class="ic-ro" style="text-align:right">{{ lc.expectedQty }}</td>
                   <td><input class="ic-input ic-num" type="number" v-model.number="lc.verifiedQty" min="0" /></td>
                   <td>
@@ -81,10 +91,23 @@
                   </td>
                   <td style="text-align:center"><input type="checkbox" v-model="lc.halalLabel" class="ic-chk" /></td>
                   <td style="text-align:center"><input type="checkbox" v-model="lc.expiryOk"   class="ic-chk" /></td>
+                  <td v-if="hasTempSensitive">
+                    <template v-if="lc.isTempSensitive">
+                      <div class="temp-input-wrap">
+                        <input class="ic-input ic-num" :class="{ 'temp-fail-input': isTempFail(lc) }"
+                          type="number" step="0.1" v-model.number="lc.coreTemp" placeholder="°C" />
+                        <span class="temp-range">{{ lc.tempMin }}–{{ lc.tempMax }} °C</span>
+                        <span v-if="isTempFail(lc)" class="temp-fail-label">
+                          <i class="fa-solid fa-triangle-exclamation"></i> Out of range
+                        </span>
+                      </div>
+                    </template>
+                    <span v-else class="ic-ro" style="color:#c3c6d4">N/A</span>
+                  </td>
                   <td><input class="ic-input" v-model="lc.notes" placeholder="—" /></td>
                 </tr>
                 <tr v-if="inspectionForm.lineChecks.length === 0">
-                  <td colspan="8" style="text-align:center;color:#9e9e9e;font-size:11px;padding:20px">No line items on this record.</td>
+                  <td :colspan="hasTempSensitive ? 9 : 8" style="text-align:center;color:#9e9e9e;font-size:11px;padding:20px">No line items on this record.</td>
                 </tr>
               </tbody>
             </table>
@@ -96,7 +119,7 @@
           <div class="insp-card-title">Inspector Sign-off</div>
           <div class="insp-signoff-grid">
             <div class="isf isf-col">
-              <label class="isf-lbl">Inspector Name <span class="req">*</span></label>
+              <label class="isf-lbl">Inspector Name <span class="req">*</span> <span class="qc-hint" title="Required — inspection is invalid without a named inspector">Required</span></label>
               <input class="ic-input-lg" v-model="inspectionForm.inspector" placeholder="Enter inspector name" />
             </div>
             <div class="isf isf-col">
@@ -110,12 +133,53 @@
           </div>
         </div>
 
-      </div><!-- /insp-body (lift for Option B) -->
+        <!-- Stock Accepted Notice (shown when status is passed) -->
+        <div v-if="inspectionForm.status === 'passed'" class="insp-card insp-card-stock-ok">
+          <div class="insp-card-title stock-ok-title">
+            <i class="fa-solid fa-circle-check"></i> Stock Accepted — Items Added to Stock Pool
+          </div>
+          <div class="stock-ok-body">
+            <table class="stock-ok-tbl">
+              <thead>
+                <tr>
+                  <th>SKU Code</th><th>SKU Name</th><th style="text-align:right">Qty</th><th>Unit</th><th>Batch No.</th><th>Expiry</th><th>Warehouse</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(lc, idx) in inspectionForm.lineChecks" :key="idx">
+                  <td>{{ lc.skuCode || '—' }}</td>
+                  <td>{{ lc.skuName }}</td>
+                  <td style="text-align:right">{{ lc.verifiedQty }}</td>
+                  <td>{{ (lineItemsMap[inspectRow.id] ?? []).find(l => l.skuCode === lc.skuCode)?.unit ?? 'pcs' }}</td>
+                  <td>{{ (lineItemsMap[inspectRow.id] ?? []).find(l => l.skuCode === lc.skuCode)?.batchNo ?? '—' }}</td>
+                  <td>{{ (lineItemsMap[inspectRow.id] ?? []).find(l => l.skuCode === lc.skuCode)?.expiryDate || '—' }}</td>
+                  <td>{{ inspectRow.warehouseName }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- QC Failure — Correction Notice (shown only when status is failed) -->
+        <div v-if="inspectionForm.status === 'failed'" class="insp-card insp-card-fail-notice">
+          <div class="insp-card-title fail-title">
+            <i class="fa-solid fa-circle-xmark"></i> QC Failed — Action Required
+          </div>
+          <div class="fail-notice-body">
+            <p>This receiving record has <strong>failed QC inspection</strong>. Please review the issues identified above.</p>
+            <p>You may correct the original record data and re-submit for inspection.</p>
+            <button class="insp-btn insp-correct" @click="openCorrectRecord">
+              <i class="fa-solid fa-pen-to-square"></i> Edit & Correct Record
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /insp-body -->
 
       <!-- Inspection action footer -->
       <div class="insp-footer">
-        <button class="insp-btn insp-sendback" @click="submitInspection('pending')">
-          <i class="fa-solid fa-rotate-left"></i> Send Back
+        <button class="insp-btn insp-cancel" @click="closeInspect">
+          <i class="fa-solid fa-xmark"></i> Cancel
         </button>
         <div class="insp-footer-right">
           <button class="insp-btn insp-reject" @click="submitInspection('failed')">
@@ -136,6 +200,14 @@
       <div class="filter-bar">
         <span class="fl">Supplier</span>
         <input class="f-search" type="text" placeholder="Enter supplier name" v-model="supplierSearch" @keyup.enter="applySearch" style="margin-left:0; width:200px" />
+        <span class="fl" style="margin-left:8px">QC Status</span>
+        <select class="f-select" v-model="qcFilter">
+          <option value="">All</option>
+          <option value="none">Not Inspected</option>
+          <option value="in_progress">In Progress</option>
+          <option value="passed">Pass</option>
+          <option value="failed">Fail</option>
+        </select>
         <button class="f-btn-primary" @click="applySearch"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
         <button class="f-btn-outline" @click="resetSearch"><i class="fa-solid fa-rotate-right"></i> Reset</button>
         <span class="result-count" style="margin-left:auto">{{ filteredRows.length }} records</span>
@@ -175,19 +247,17 @@
                   <th style="min-width:82px;text-align:right">Goods Total</th>
                   <th style="min-width:100px">Created At</th>
                   <th style="min-width:88px">Created By</th>
+                  <th style="min-width:90px;text-align:center">QC Status</th>
                   <th class="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="row in filteredRows" :key="row.id"
-                  :class="{ 'row-sel': checkedIds.has(row.id) }"
+                  :class="{ 'row-sel': checkedIds.has(row.id), 'row-fail': inspectionMap[row.id]?.status === 'failed' }"
                   class="row-clickable"
                   @click="openInspect(row)">
                   <td class="col-chk"><input type="checkbox" :checked="checkedIds.has(row.id)" @change="toggleRow(row.id)" @click.stop /></td>
-                  <td class="col-id">
-                    {{ row.id }}
-                    <span v-if="inspectionMap[row.id]" :class="['insp-dot', `idot--${inspectionMap[row.id]!.status}`]"></span>
-                  </td>
+                  <td class="col-id">{{ row.id }}</td>
                   <td>{{ row.stockInType }}</td>
                   <td>{{ row.document }}</td>
                   <td :class="{ dash: !row.orderNo }">{{ row.orderNo || '—' }}</td>
@@ -200,13 +270,24 @@
                   <td style="text-align:right">{{ row.goodsTotal }}</td>
                   <td>{{ row.createdAt }}</td>
                   <td :class="{ dash: !row.createdBy }">{{ row.createdBy || '—' }}</td>
+                  <td style="text-align:center" @click.stop>
+                    <span v-if="!inspectionMap[row.id]" class="qc-badge qc-na">—</span>
+                    <span v-else :class="['qc-badge', `qc-${inspectionMap[row.id].status}`]">
+                      {{ qcStatusLabel(inspectionMap[row.id].status) }}
+                    </span>
+                  </td>
                   <td class="col-actions" @click.stop>
                     <div><a class="row-edit" @click.prevent="openEdit(row)"><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
-                    <div><a class="row-del"  @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
+                    <div v-if="inspectionMap[row.id]?.status === 'failed'">
+                      <a class="row-correct" @click.prevent="openEdit(row)">
+                        <i class="fa-solid fa-circle-exclamation"></i> Correct
+                      </a>
+                    </div>
+                    <div><a class="row-del" @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
                   </td>
                 </tr>
                 <tr v-if="filteredRows.length === 0">
-                  <td colspan="15" class="empty-msg">No records found.</td>
+                  <td colspan="16" class="empty-msg">No records found.</td>
                 </tr>
               </tbody>
             </table>
@@ -232,12 +313,16 @@
         <div v-if="detailMode !== null" class="detail-panel">
           <div class="dp-header">
             <div class="dp-header-left">
-              <span class="dp-badge" :class="detailMode === 'new' ? 'badge-new' : 'badge-edit'">
-                {{ detailMode === 'new' ? 'NEW RECORD' : 'EDIT RECORD' }}
+              <span class="dp-badge" :class="detailMode === 'new' ? 'badge-new' : (isCorrectionMode ? 'badge-correct' : 'badge-edit')">
+                {{ detailMode === 'new' ? 'NEW RECORD' : (isCorrectionMode ? 'CORRECTION' : 'EDIT RECORD') }}
               </span>
               <span class="dp-title">{{ detailMode === 'new' ? 'Stock In — New Entry' : `Stock In #${editForm.id}` }}</span>
             </div>
             <button class="dp-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div v-if="isCorrectionMode" class="dp-correction-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            This record failed QC inspection. Correct the data below and re-save. A new inspection will be required.
           </div>
           <div class="dp-body">
             <div class="dp-section-title">Record Information</div>
@@ -268,7 +353,7 @@
             <div class="dp-section-title" style="margin-top:16px">SKU & Packaging</div>
             <div class="dp-grid">
               <div class="dp-field dp-field-full">
-                <label>SKU Name</label>
+                <label>SKU Name <span class="qc-hint" title="Determines temperature sensitivity during QC inspection">QC</span></label>
                 <input type="text" v-model="editForm.skuName" placeholder="Enter SKU name" />
               </div>
               <div class="dp-field">
@@ -278,14 +363,14 @@
                 </select>
               </div>
               <div class="dp-field">
-                <label>Goods Total</label>
+                <label>Goods Total <span class="qc-hint" title="Used as expected quantity when no line items are defined">QC</span></label>
                 <input type="number" v-model.number="editForm.goodsTotal" min="0" />
               </div>
             </div>
             <div class="dp-section-title" style="margin-top:16px">Warehouse & Location</div>
             <div class="dp-grid">
               <div class="dp-field">
-                <label>Warehouse <span class="req">*</span></label>
+                <label>Warehouse <span class="req">*</span> <span class="qc-hint qc-hint-stock" title="Attributed to stock pool entry when QC passes">Stock</span></label>
                 <select v-model="editForm.warehouseName"><option>Zone A</option><option>Zone B</option><option>Zone C</option><option>Zone D</option></select>
               </div>
               <div class="dp-field">
@@ -294,16 +379,23 @@
               </div>
             </div>
             <div class="dp-section-title" style="margin-top:16px">
-              Line Items
+              <span style="display:flex;align-items:center;gap:6px">
+                Line Items
+                <span class="li-qc-notice" title="SKU Name, Qty and Expiry in this table directly affect QC inspection results"><i class="fa-solid fa-flask-vial"></i> QC-linked fields</span>
+              </span>
               <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
             </div>
-            <div class="li-table-wrap">
+            <div class="li-table-wrap li-table-qc-accent">
               <table class="li-table">
                 <thead>
                   <tr>
-                    <th style="min-width:90px">SKU Code</th><th style="min-width:140px">SKU Name</th>
-                    <th style="min-width:55px;text-align:right">Qty</th><th style="min-width:55px">Unit</th>
-                    <th style="min-width:90px">Batch No.</th><th style="min-width:90px">Expiry</th><th style="width:32px"></th>
+                    <th style="min-width:90px">SKU Code</th>
+                    <th style="min-width:140px">SKU Name <span class="qc-col-dot" title="Determines temp-sensitivity check in QC"></span></th>
+                    <th style="min-width:55px;text-align:right">Qty <span class="qc-col-dot" title="Used as expected quantity in QC checklist"></span></th>
+                    <th style="min-width:55px">Unit</th>
+                    <th style="min-width:90px">Batch No. <span class="qc-col-dot qc-col-dot-stock" title="Stored in stock pool when QC passes"></span></th>
+                    <th style="min-width:90px">Expiry <span class="qc-col-dot" title="Pre-fills expiry check in QC"></span></th>
+                    <th style="width:32px"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -330,7 +422,10 @@
           </div>
           <div class="dp-footer">
             <button class="fp-btn fp-cancel" @click="closeDetail"><i class="fa-solid fa-xmark"></i> Cancel</button>
-            <button class="fp-btn fp-save" @click="saveRecord"><i class="fa-solid fa-floppy-disk"></i> {{ detailMode === 'new' ? 'Create' : 'Save Changes' }}</button>
+            <button class="fp-btn fp-save" @click="saveRecord">
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ detailMode === 'new' ? 'Create' : (isCorrectionMode ? 'Save & Reset QC' : 'Save Changes') }}
+            </button>
           </div>
         </div>
       </transition>
@@ -362,10 +457,13 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { addToStockPool, removeFromStockPool } from './stock'
 
 const clock          = ref('')
 const supplierSearch = ref('')
 const activeFilter   = ref('')
+const qcFilter       = ref('')
+const activeQcFilter = ref('')
 const allChecked     = ref(false)
 const checkedIds     = ref<Set<number>>(new Set())
 let clockTimer: ReturnType<typeof setInterval> | null = null
@@ -376,8 +474,16 @@ function tick() {
     hour: '2-digit', minute: '2-digit', hour12: true,
   })
 }
-function applySearch() { activeFilter.value = supplierSearch.value.trim() }
-function resetSearch()  { supplierSearch.value = ''; activeFilter.value = '' }
+function applySearch() {
+  activeFilter.value   = supplierSearch.value.trim()
+  activeQcFilter.value = qcFilter.value
+}
+function resetSearch() {
+  supplierSearch.value = ''
+  activeFilter.value   = ''
+  qcFilter.value       = ''
+  activeQcFilter.value = ''
+}
 
 function toggleAll() {
   if (allChecked.value) filteredRows.value.forEach(r => checkedIds.value.add(r.id))
@@ -417,37 +523,68 @@ const lineItemsMap: Record<number, LineItem[]> = {
     { skuCode: 'SKU-0034', skuName: 'Corrugated Box 400×300', qty: 20, unit: 'carton', batchNo: 'BT-4A', expiryDate: '' },
     { skuCode: 'SKU-0034', skuName: 'Corrugated Box 400×300', qty: 4,  unit: 'carton', batchNo: 'BT-4B', expiryDate: '' },
   ],
-  1: [{ skuCode: 'SKU-0019', skuName: 'Sodium Benzoate E211', qty: 80, unit: 'carton', batchNo: 'BT-1A', expiryDate: '2027-06-01' }],
+  3: [{ skuCode: 'SKU-0078', skuName: 'Tomato Paste (Drum)',     qty: 20, unit: 'pcs',   batchNo: 'BT-3A', expiryDate: '2026-12-01' }],
+  1: [{ skuCode: 'SKU-0019', skuName: 'Sodium Benzoate E211',    qty: 80, unit: 'carton', batchNo: 'BT-1A', expiryDate: '2027-06-01' }],
 }
 
 const filteredRows = computed(() => {
-  const q = activeFilter.value.toLowerCase()
-  if (!q) return [...rows.value]
-  return rows.value.filter(r => r.supplierName.toLowerCase().includes(q))
+  const q  = activeFilter.value.toLowerCase()
+  const qc = activeQcFilter.value
+  return rows.value.filter(r => {
+    const supplierMatch = !q || r.supplierName.toLowerCase().includes(q)
+    let qcMatch = true
+    if (qc === 'none')       qcMatch = !inspectionMap[r.id]
+    else if (qc)             qcMatch = inspectionMap[r.id]?.status === qc
+    return supplierMatch && qcMatch
+  })
 })
 
-// ── Detail panel (Edit / New) ──────────────────────
+// ── Detail panel (Edit / New / Correct) ──────────────────────
 type DetailMode = 'edit' | 'new' | null
-const detailMode    = ref<DetailMode>(null)
-const editForm      = ref<StockInRow>({ id: 0, stockInType: 'Purchase In', document: 'With Order', orderNo: '', method: 'Scan', skuName: '', packageUnit: '', supplierName: '', warehouseName: 'Zone A', warehousePositionName: '', goodsTotal: 0, createdAt: '', createdBy: '' })
-const editLineItems = ref<LineItem[]>([])
+const detailMode      = ref<DetailMode>(null)
+const isCorrectionMode = ref(false)
+const editForm        = ref<StockInRow>({ id: 0, stockInType: 'Purchase In', document: 'With Order', orderNo: '', method: 'Scan', skuName: '', packageUnit: '', supplierName: '', warehouseName: 'Zone A', warehousePositionName: '', goodsTotal: 0, createdAt: '', createdBy: '' })
+const editLineItems   = ref<LineItem[]>([])
 
-function openEdit(row: StockInRow) { editForm.value = { ...row }; editLineItems.value = JSON.parse(JSON.stringify(lineItemsMap[row.id] ?? [])); detailMode.value = 'edit' }
-function openNew()  { editForm.value = { id: 0, stockInType: 'Purchase In', document: 'With Order', orderNo: '', method: 'Scan', skuName: '', packageUnit: '', supplierName: '', warehouseName: 'Zone A', warehousePositionName: '', goodsTotal: 0, createdAt: new Date().toISOString().slice(0, 10), createdBy: '' }; editLineItems.value = []; detailMode.value = 'new' }
-function openEditSelected() { const id = [...checkedIds.value][0]; const row = rows.value.find(r => r.id === id); if (row) openEdit(row) }
-function closeDetail() { detailMode.value = null }
+function openEdit(row: StockInRow, correction = false) {
+  editForm.value       = { ...row }
+  editLineItems.value  = JSON.parse(JSON.stringify(lineItemsMap[row.id] ?? []))
+  detailMode.value     = 'edit'
+  isCorrectionMode.value = correction
+}
+function openNew() {
+  editForm.value = { id: 0, stockInType: 'Purchase In', document: 'With Order', orderNo: '', method: 'Scan', skuName: '', packageUnit: '', supplierName: '', warehouseName: 'Zone A', warehousePositionName: '', goodsTotal: 0, createdAt: new Date().toISOString().slice(0, 10), createdBy: '' }
+  editLineItems.value    = []
+  detailMode.value       = 'new'
+  isCorrectionMode.value = false
+}
+function openEditSelected() {
+  const id  = [...checkedIds.value][0]
+  const row = rows.value.find(r => r.id === id)
+  if (row) openEdit(row)
+}
+function closeDetail() { detailMode.value = null; isCorrectionMode.value = false }
 
 function saveRecord() {
   if (detailMode.value === 'new') {
     const newId = Math.max(0, ...rows.value.map(r => r.id)) + 1
-    editForm.value.id = newId; rows.value.unshift({ ...editForm.value }); lineItemsMap[newId] = JSON.parse(JSON.stringify(editLineItems.value))
+    editForm.value.id = newId
+    rows.value.unshift({ ...editForm.value })
+    lineItemsMap[newId] = JSON.parse(JSON.stringify(editLineItems.value))
   } else {
     const idx = rows.value.findIndex(r => r.id === editForm.value.id)
-    if (idx !== -1) { rows.value[idx] = { ...editForm.value }; lineItemsMap[editForm.value.id] = JSON.parse(JSON.stringify(editLineItems.value)) }
+    if (idx !== -1) {
+      rows.value[idx] = { ...editForm.value }
+      lineItemsMap[editForm.value.id] = JSON.parse(JSON.stringify(editLineItems.value))
+    }
+    if (isCorrectionMode.value) {
+      delete inspectionMap[editForm.value.id]
+      removeFromStockPool(editForm.value.id)
+    }
   }
   closeDetail()
 }
-function addLineItem()         { editLineItems.value.push({ skuCode: '', skuName: '', qty: 1, unit: 'pcs', batchNo: '', expiryDate: '' }) }
+function addLineItem()               { editLineItems.value.push({ skuCode: '', skuName: '', qty: 1, unit: 'pcs', batchNo: '', expiryDate: '' }) }
 function removeLineItem(idx: number) { editLineItems.value.splice(idx, 1) }
 
 // ── Delete ────────────────────────────────────────
@@ -462,19 +599,74 @@ function confirmDelete() {
 }
 
 // ── Inspection ────────────────────────────────────
-interface InspLineCheck { skuCode: string; skuName: string; expectedQty: number; verifiedQty: number; condition: 'Good' | 'Damaged' | 'Rejected'; halalLabel: boolean; expiryOk: boolean; notes: string }
-interface InspectionData { status: 'pending' | 'in_progress' | 'passed' | 'failed'; inspector: string; inspectedAt: string; remarks: string; lineChecks: InspLineCheck[] }
+interface InspLineCheck {
+  skuCode: string
+  skuName: string
+  expectedQty: number
+  verifiedQty: number
+  condition: 'Good' | 'Damaged' | 'Rejected'
+  halalLabel: boolean
+  expiryOk: boolean
+  notes: string
+  // Temperature check
+  isTempSensitive?: boolean
+  tempMin?: number
+  tempMax?: number
+  coreTemp?: number | null
+}
+interface InspectionData {
+  status: 'in_progress' | 'passed' | 'failed'
+  inspector: string
+  inspectedAt: string
+  remarks: string
+  lineChecks: InspLineCheck[]
+}
 
 const inspectRow     = ref<StockInRow | null>(null)
 const inspectionMap  = reactive<Record<number, InspectionData>>({})
-const inspectionForm = ref<InspectionData>({ status: 'pending', inspector: '', inspectedAt: '', remarks: '', lineChecks: [] })
+const inspectionForm = ref<InspectionData>({ status: 'in_progress', inspector: '', inspectedAt: '', remarks: '', lineChecks: [] })
+
+function getTempProfile(skuName: string): { isTempSensitive: boolean; tempMin?: number; tempMax?: number } {
+  const n = skuName.toLowerCase()
+  if (n.includes('oil') || n.includes('olein'))            return { isTempSensitive: true, tempMin: 15, tempMax: 30 }
+  if (n.includes('paste') || n.includes('tomato'))         return { isTempSensitive: true, tempMin: 2,  tempMax: 25 }
+  if (n.includes('cream') || n.includes('dairy') || n.includes('yogurt')) return { isTempSensitive: true, tempMin: 2, tempMax: 8 }
+  if (n.includes('powder') || n.includes('curry') || n.includes('spice')) return { isTempSensitive: true, tempMin: 10, tempMax: 35 }
+  if (n.includes('benzoate') || n.includes('additive') || n.includes('acid')) return { isTempSensitive: true, tempMin: 15, tempMax: 30 }
+  return { isTempSensitive: false }
+}
 
 function buildLineChecks(row: StockInRow): InspLineCheck[] {
   const items = lineItemsMap[row.id] ?? []
   if (items.length > 0) {
-    return items.map(li => ({ skuCode: li.skuCode, skuName: li.skuName, expectedQty: li.qty, verifiedQty: li.qty, condition: 'Good', halalLabel: true, expiryOk: !!li.expiryDate, notes: '' }))
+    return items.map(li => {
+      const temp = getTempProfile(li.skuName)
+      return {
+        skuCode: li.skuCode, skuName: li.skuName,
+        expectedQty: li.qty, verifiedQty: li.qty,
+        condition: 'Good', halalLabel: true, expiryOk: !!li.expiryDate,
+        notes: '',
+        ...temp, coreTemp: null,
+      }
+    })
   }
-  return [{ skuCode: '', skuName: row.skuName || '—', expectedQty: row.goodsTotal, verifiedQty: row.goodsTotal, condition: 'Good', halalLabel: true, expiryOk: true, notes: '' }]
+  const temp = getTempProfile(row.skuName)
+  return [{
+    skuCode: '', skuName: row.skuName || '—',
+    expectedQty: row.goodsTotal, verifiedQty: row.goodsTotal,
+    condition: 'Good', halalLabel: true, expiryOk: true,
+    notes: '',
+    ...temp, coreTemp: null,
+  }]
+}
+
+const hasTempSensitive = computed(() =>
+  inspectionForm.value.lineChecks.some(lc => lc.isTempSensitive)
+)
+
+function isTempFail(lc: InspLineCheck): boolean {
+  if (!lc.isTempSensitive || lc.coreTemp == null) return false
+  return lc.coreTemp < (lc.tempMin ?? -Infinity) || lc.coreTemp > (lc.tempMax ?? Infinity)
 }
 
 function openInspect(row: StockInRow) {
@@ -490,19 +682,56 @@ function closeInspect() { inspectRow.value = null }
 function submitInspection(status: InspectionData['status']) {
   inspectionForm.value.status = status
   inspectionMap[inspectRow.value!.id] = JSON.parse(JSON.stringify(inspectionForm.value))
+  if (status === 'passed') {
+    const row = inspectRow.value!
+    const stockItems = inspectionForm.value.lineChecks.map(lc => {
+      const li = (lineItemsMap[row.id] ?? []).find(l => l.skuCode === lc.skuCode)
+      return {
+        skuCode: lc.skuCode || '',
+        skuName: lc.skuName,
+        qty: lc.verifiedQty,
+        unit: li?.unit ?? 'pcs',
+        batchNo: li?.batchNo ?? '',
+        expiryDate: li?.expiryDate ?? '',
+        warehouseName: row.warehouseName,
+      }
+    })
+    addToStockPool(row.id, stockItems)
+  }
   closeInspect()
 }
 
-function statusLabel(s: string) {
-  return ({ pending: 'Pending', in_progress: 'In Progress', passed: 'Passed', failed: 'Failed' } as Record<string,string>)[s] ?? s
+function openCorrectRecord() {
+  const row = inspectRow.value!
+  closeInspect()
+  openEdit(row, true)
 }
+
+function statusLabel(s: string): string {
+  return ({ in_progress: 'In Progress', passed: 'Pass', failed: 'Fail' } as Record<string, string>)[s] ?? s
+}
+
+function qcStatusLabel(s: string): string {
+  return ({ in_progress: 'In Progress', passed: 'Pass', failed: 'Fail' } as Record<string, string>)[s] ?? s
+}
+
 function lcRowClass(lc: InspLineCheck) {
   if (lc.condition === 'Rejected' || !lc.halalLabel) return 'lc-rejected'
   if (lc.condition === 'Damaged' || !lc.expiryOk || lc.verifiedQty < lc.expectedQty) return 'lc-warn'
   return ''
 }
 
-onMounted(() => { tick(); clockTimer = setInterval(tick, 1000) })
+onMounted(() => {
+  tick()
+  clockTimer = setInterval(tick, 1000)
+  // Pre-seed sample QC statuses for concept demo
+  inspectionMap[1] = { status: 'passed',      inspector: 'Amirul Hassan', inspectedAt: '2025-10-02', remarks: 'All items in good condition.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 1)!) }
+  inspectionMap[4] = { status: 'passed',      inspector: 'Saliza Rina',   inspectedAt: '2025-12-16', remarks: 'Qty verified, packaging intact.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 4)!) }
+  inspectionMap[5] = { status: 'failed',       inspector: 'Operator A',    inspectedAt: '2025-12-21', remarks: 'Film roll outer wrap damaged, moisture exposure possible.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 5)!) }
+  inspectionMap[6] = { status: 'passed',      inspector: 'Saliza Rina',   inspectedAt: '2026-01-10', remarks: 'Core temp within range, labels OK.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 6)!) }
+  inspectionMap[9] = { status: 'passed',      inspector: 'Amirul Hassan', inspectedAt: '2026-04-15', remarks: 'Palm olein core temp 22°C — within range. Halal label present.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 9)!) }
+  inspectionMap[3] = { status: 'in_progress', inspector: 'Operator A',    inspectedAt: '2025-11-30', remarks: '', lineChecks: buildLineChecks(rows.value.find(r => r.id === 3)!) }
+})
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 </script>
 
@@ -525,7 +754,6 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .insp-type-badge { background: #e3f2fd; color: #1565c0; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 3px; }
 .insp-record-id { font-size: 13px; font-weight: 700; color: #515151; }
 .insp-status-chip { margin-left: auto; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 12px; letter-spacing: 0.3px; }
-.isc--pending     { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0; }
 .isc--in_progress { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
 .isc--passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
 .isc--failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
@@ -535,8 +763,9 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .insp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 
 .insp-card { background: #fff; border: 1px solid #c3c6d4; border-radius: 6px; overflow: hidden; }
-.insp-card-title { padding: 8px 14px; font-size: 10px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.4px; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; gap: 10px; }
+.insp-card-title { padding: 8px 14px; font-size: 10px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.4px; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .insp-card-sub { font-size: 9px; font-weight: 400; color: #9e9e9e; text-transform: none; letter-spacing: 0; }
+.temp-notice { margin-left: auto; font-size: 9px; font-weight: 600; color: #e65100; background: #fff3e0; border: 1px solid #ffb74d; border-radius: 3px; padding: 2px 8px; text-transform: none; letter-spacing: 0; display: flex; align-items: center; gap: 4px; }
 
 .insp-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
 .isf { padding: 10px 14px; border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; }
@@ -551,7 +780,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .insp-tbl th { background: #f5f5f5; color: #9e9e9e; font-size: 9px; text-transform: uppercase; padding: 7px 10px; border-bottom: 1px solid #e8e8e8; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; text-align: left; }
 .insp-tbl td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; }
 .insp-tbl tbody tr:hover td { background: #fafafa; }
-.ic-ro { color: #515151; font-size: 11px; padding: 5px 10px !important; white-space: nowrap; }
+.ic-ro { color: #515151; font-size: 11px; padding: 5px 10px !important; }
 .ic-input { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 4px 7px; height: 26px; outline: none; width: 100%; }
 .ic-input:focus { border-color: #1565c0; }
 .ic-num { text-align: right; width: 72px; }
@@ -561,6 +790,14 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .cond-rejected { border-color: #ef9a9a; color: #c62828; background: #ffebee; }
 .lc-warn     td { background: #fff8e1 !important; }
 .lc-rejected td { background: #ffebee !important; }
+.lc-temp-fail td { background: #fff3e0 !important; }
+
+/* Temperature-sensitive check */
+.temp-tag { display: block; font-size: 8px; color: #e65100; font-weight: 600; letter-spacing: 0.2px; margin-top: 2px; }
+.temp-input-wrap { display: flex; flex-direction: column; gap: 2px; }
+.temp-range { font-size: 9px; color: #9e9e9e; white-space: nowrap; }
+.temp-fail-input { border-color: #ef9a9a !important; background: #ffebee !important; color: #c62828 !important; }
+.temp-fail-label { font-size: 9px; color: #c62828; font-weight: 600; display: flex; align-items: center; gap: 3px; }
 
 .insp-signoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; }
 .isf-col { display: flex; flex-direction: column; gap: 4px; }
@@ -572,28 +809,31 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .ic-textarea:focus { border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,.1); }
 .req { color: #e53935; }
 
+/* QC Fail correction notice */
+.insp-card-fail-notice { border-color: #ef9a9a; }
+.fail-title { background: linear-gradient(0deg, #ffcdd2 0%, #ffebee 100%) !important; color: #c62828 !important; border-color: #ef9a9a !important; }
+.fail-notice-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.fail-notice-body p { font-size: 11px; color: #515151; line-height: 1.6; }
+
 .insp-footer { background: #fff; border-top: 1px solid #c3c6d4; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .insp-footer-right { display: flex; gap: 8px; }
 .insp-btn { border-radius: 4px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
-.insp-sendback { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
-.insp-sendback:hover { background: #e8e8e8; }
+.insp-cancel { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
+.insp-cancel:hover { background: #e8e8e8; }
 .insp-reject  { background: #fff; border-color: #ef9a9a; color: #c62828; }
 .insp-reject:hover  { background: #ffebee; }
 .insp-approve { background: #1565c0; color: #fff; }
 .insp-approve:hover { background: #1976d2; }
-
-/* Inspection status dot on list rows */
-.insp-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-left: 4px; vertical-align: middle; }
-.idot--pending     { background: #bdbdbd; }
-.idot--in_progress { background: #f57c00; }
-.idot--passed      { background: #43a047; }
-.idot--failed      { background: #e53935; }
+.insp-correct { background: #fff3e0; border-color: #ffb74d; color: #e65100; }
+.insp-correct:hover { background: #ffe0b2; }
 
 /* ── Filter / search bar ── */
 .filter-bar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 6px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .fl { font-size: 10px; color: #9e9e9e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .f-search { border: 1px solid #c3c6d4; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 4px 8px; color: #515151; outline: none; height: 28px; }
 .f-search:focus { border-color: #1565c0; }
+.f-select { border: 1px solid #c3c6d4; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 4px 8px; color: #515151; outline: none; height: 28px; background: #fff; }
+.f-select:focus { border-color: #1565c0; }
 .f-btn-primary { background: #1565c0; border: none; border-radius: 3px; color: #fff; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 28px; padding: 0 12px; display: flex; align-items: center; gap: 5px; }
 .f-btn-primary:hover { background: #1976d2; }
 .f-btn-outline { background: #fff; border: 1px solid #c3c6d4; border-radius: 3px; color: #515151; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; height: 28px; padding: 0 12px; display: flex; align-items: center; gap: 5px; }
@@ -619,20 +859,30 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .tbl-wrap { flex: 1; overflow: auto; }
 .tbl-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
 .tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1100px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1200px; }
 th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
 td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; color: #515151; white-space: nowrap; font-size: 11px; }
 tbody tr:nth-child(even) td { background: #f9f9f9; }
 tbody tr.row-clickable { cursor: pointer; }
 tbody tr.row-clickable:hover td { background: #e3f2fd !important; }
 tbody tr.row-sel td { background: #e3f2fd; }
-.col-chk { width: 36px; text-align: center; } .col-id { width: 56px; text-align: center; font-weight: 700; } .col-actions { width: 80px; text-align: center; }
+tbody tr.row-fail td { background: #fff5f5 !important; }
+tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
+.col-chk { width: 36px; text-align: center; } .col-id { width: 56px; text-align: center; font-weight: 700; } .col-actions { width: 88px; text-align: center; }
 .dash { color: #c3c6d4; }
-.row-edit, .row-del { cursor: pointer; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; line-height: 1.8; }
-.row-edit { color: #1565c0; } .row-edit:hover { text-decoration: underline; }
-.row-del  { color: #e53935; } .row-del:hover  { text-decoration: underline; }
+.row-edit, .row-del, .row-correct { cursor: pointer; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; line-height: 1.8; }
+.row-edit    { color: #1565c0; } .row-edit:hover    { text-decoration: underline; }
+.row-del     { color: #e53935; } .row-del:hover     { text-decoration: underline; }
+.row-correct { color: #e65100; } .row-correct:hover { text-decoration: underline; }
 .method-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.3px; }
 .badge-scan { background: #e3f2fd; color: #1565c0; } .badge-rfid { background: #f3e5f5; color: #7b1fa2; }
+
+/* QC Status badges */
+.qc-badge { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.3px; display: inline-block; }
+.qc-na          { color: #bdbdbd; }
+.qc-in_progress { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
+.qc-passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.qc-failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
 
 /* ── Pagination ── */
 .pag-bar { background: #fff; border-top: 1px solid #c3c6d4; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -656,10 +906,13 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .dp-header { padding: 0 16px; height: 52px; border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); }
 .dp-header-left { display: flex; align-items: center; gap: 10px; }
 .dp-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 3px; }
-.badge-edit { background: #e3f2fd; color: #1565c0; } .badge-new { background: #e8f5e9; color: #388E3C; }
+.badge-edit    { background: #e3f2fd; color: #1565c0; }
+.badge-new     { background: #e8f5e9; color: #388E3C; }
+.badge-correct { background: #fff3e0; color: #e65100; }
 .dp-title { font-size: 13px; font-weight: 700; color: #515151; }
 .dp-close { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; font-size: 13px; height: 26px; width: 26px; display: flex; align-items: center; justify-content: center; }
 .dp-close:hover { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
+.dp-correction-banner { background: #fff3e0; border-bottom: 1px solid #ffb74d; padding: 8px 16px; font-size: 10px; color: #e65100; font-weight: 600; display: flex; align-items: flex-start; gap: 6px; flex-shrink: 0; line-height: 1.5; }
 .dp-body { flex: 1; overflow-y: auto; padding: 16px; }
 .dp-body::-webkit-scrollbar { width: 4px; }
 .dp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
@@ -696,4 +949,20 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .del-title { font-size: 14px; font-weight: 700; color: #515151; margin-bottom: 8px; }
 .del-msg { font-size: 11px; color: #757575; line-height: 1.6; margin-bottom: 20px; }
 .del-actions { display: flex; justify-content: center; gap: 10px; }
+
+/* QC-linked field indicators */
+.qc-hint { font-size: 8px; font-weight: 700; background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; border-radius: 3px; padding: 1px 5px; letter-spacing: 0.3px; cursor: help; margin-left: 4px; text-transform: uppercase; vertical-align: middle; }
+.qc-hint-stock { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+.li-qc-notice { font-size: 8px; font-weight: 700; background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; border-radius: 3px; padding: 2px 6px; letter-spacing: 0.3px; cursor: help; display: inline-flex; align-items: center; gap: 3px; text-transform: uppercase; }
+.qc-col-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #fb8c00; margin-left: 3px; vertical-align: middle; cursor: help; flex-shrink: 0; }
+.qc-col-dot-stock { background: #43a047; }
+.li-table-qc-accent { border-left: 3px solid #ffb74d !important; }
+
+/* Stock Accepted card */
+.insp-card-stock-ok { border-color: #a5d6a7; }
+.stock-ok-title { background: linear-gradient(0deg, #c8e6c9 0%, #e8f5e9 100%) !important; color: #2e7d32 !important; border-color: #a5d6a7 !important; }
+.stock-ok-body { padding: 10px 14px; }
+.stock-ok-tbl { width: 100%; border-collapse: collapse; font-size: 10px; }
+.stock-ok-tbl th { background: #f1f8e9; color: #558b2f; font-size: 9px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid #c8e6c9; font-weight: 700; text-align: left; white-space: nowrap; }
+.stock-ok-tbl td { padding: 4px 8px; border-bottom: 1px solid #f0f0f0; color: #515151; white-space: nowrap; font-size: 10px; }
 </style>

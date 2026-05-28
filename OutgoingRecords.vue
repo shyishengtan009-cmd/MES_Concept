@@ -127,15 +127,15 @@
 
       <!-- Inspection footer -->
       <div class="insp-footer">
-        <button class="ifp-btn ifp-back"    @click="submitInspection('pending')">
-          <i class="fa-solid fa-rotate-left"></i> Send Back
+        <button class="ifp-btn ifp-back" @click="closeInspect">
+          <i class="fa-solid fa-xmark"></i> Cancel
         </button>
         <div style="margin-left:auto;display:flex;gap:8px">
           <button class="ifp-btn ifp-reject"  @click="submitInspection('failed')">
-            <i class="fa-solid fa-circle-xmark"></i> Reject
+            <i class="fa-solid fa-circle-xmark"></i> Hold Dispatch
           </button>
           <button class="ifp-btn ifp-approve" @click="submitInspection('passed')">
-            <i class="fa-solid fa-circle-check"></i> Approve
+            <i class="fa-solid fa-circle-check"></i> Clear for Dispatch
           </button>
         </div>
       </div>
@@ -151,6 +151,14 @@
       <div class="filter-bar">
         <span class="fl">Consignee</span>
         <input class="f-search" type="text" placeholder="Enter consignee name" v-model="consigneeSearch" @keyup.enter="applySearch" style="margin-left:0; width:200px" />
+        <span class="fl" style="margin-left:8px">Dispatch Check</span>
+        <select class="f-select" v-model="qcFilter">
+          <option value="">All</option>
+          <option value="none">Not Checked</option>
+          <option value="in_progress">In Progress</option>
+          <option value="passed">Cleared</option>
+          <option value="failed">Held</option>
+        </select>
         <button class="f-btn-primary" @click="applySearch"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
         <button class="f-btn-outline" @click="resetSearch"><i class="fa-solid fa-rotate-right"></i> Reset</button>
         <span class="result-count" style="margin-left:auto">{{ filteredRows.length }} records</span>
@@ -188,19 +196,17 @@
                   <th style="min-width:78px">Pack Unit</th>
                   <th style="min-width:100px">Created At</th>
                   <th style="min-width:88px">Created By</th>
+                  <th style="min-width:100px;text-align:center">Dispatch Check</th>
                   <th class="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="row in filteredRows" :key="row.id"
-                    :class="{ 'row-sel': checkedIds.has(row.id) }"
+                    :class="{ 'row-sel': checkedIds.has(row.id), 'row-fail': inspectionMap[row.id]?.status === 'failed' }"
                     class="row-clickable"
                     @click="openInspect(row)">
                   <td class="col-chk" @click.stop><input type="checkbox" :checked="checkedIds.has(row.id)" @change="toggleRow(row.id)" /></td>
-                  <td class="col-id">
-                    {{ row.id }}
-                    <span v-if="inspectionMap[row.id]" :class="['insp-dot', 'idot--' + inspectionMap[row.id]!.status]" :title="inspectionMap[row.id]!.status"></span>
-                  </td>
+                  <td class="col-id">{{ row.id }}</td>
                   <td>{{ row.stockOutType }}</td>
                   <td>{{ row.document }}</td>
                   <td :class="{ dash: !row.orderNo }">{{ row.orderNo || '—' }}</td>
@@ -211,13 +217,19 @@
                   <td :class="{ dash: !row.packUnit }">{{ row.packUnit || '—' }}</td>
                   <td>{{ row.createdAt }}</td>
                   <td :class="{ dash: !row.createdBy }">{{ row.createdBy || '—' }}</td>
+                  <td style="text-align:center" @click.stop>
+                    <span v-if="!inspectionMap[row.id]" class="qc-badge qc-na">—</span>
+                    <span v-else :class="['qc-badge', `qc-${inspectionMap[row.id].status}`]">
+                      {{ qcStatusLabel(inspectionMap[row.id].status) }}
+                    </span>
+                  </td>
                   <td class="col-actions" @click.stop>
                     <div><a class="row-edit" @click.prevent="openEdit(row)"><i class="fa-regular fa-pen-to-square"></i> Edit</a></div>
                     <div><a class="row-del"  @click.prevent="openDelete(row.id)"><i class="fa-regular fa-trash-can"></i> Delete</a></div>
                   </td>
                 </tr>
                 <tr v-if="filteredRows.length === 0">
-                  <td colspan="13" class="empty-msg">No records found.</td>
+                  <td colspan="14" class="empty-msg">No records found.</td>
                 </tr>
               </tbody>
             </table>
@@ -319,7 +331,12 @@
             <!-- Section: Line Items -->
             <div class="dp-section-title" style="margin-top:16px">
               Line Items
-              <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
+              <div style="display:flex;gap:6px;align-items:center">
+                <button class="li-add-btn li-stock-btn" @click="showStockPicker = true">
+                  <i class="fa-solid fa-box-open"></i> Pick from Stock
+                </button>
+                <button class="li-add-btn" @click="addLineItem"><i class="fa-solid fa-plus"></i> Add SKU</button>
+              </div>
             </div>
             <div class="li-table-wrap">
               <table class="li-table">
@@ -376,6 +393,42 @@
             <button class="fp-btn fp-save" @click="saveRecord"><i class="fa-solid fa-floppy-disk"></i> {{ detailMode === 'new' ? 'Create' : 'Save Changes' }}</button>
           </div>
 
+          <!-- Stock Picker overlay (positioned over the panel) -->
+          <transition name="sp-fade">
+            <div v-if="showStockPicker" class="sp-overlay" @click.self="showStockPicker = false">
+              <div class="sp-modal">
+                <div class="sp-header">
+                  <span class="sp-title"><i class="fa-solid fa-box-open"></i> Pick from Accepted Stock</span>
+                  <button class="sp-close" @click="showStockPicker = false"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="sp-hint">Click a row to add it as a line item. Only QC-passed incoming items are shown.</div>
+                <div class="sp-body">
+                  <table class="sp-table">
+                    <thead>
+                      <tr>
+                        <th>SKU Code</th><th>SKU Name</th><th style="text-align:right">Qty</th><th>Unit</th><th>Batch No.</th><th>Expiry</th><th>Warehouse</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(item, idx) in stockPool" :key="idx" class="sp-row" @click="pickStockItem(item)">
+                        <td>{{ item.skuCode }}</td>
+                        <td>{{ item.skuName }}</td>
+                        <td style="text-align:right">{{ item.qty }}</td>
+                        <td>{{ item.unit }}</td>
+                        <td>{{ item.batchNo || '—' }}</td>
+                        <td>{{ item.expiryDate || '—' }}</td>
+                        <td>{{ item.warehouseName }}</td>
+                      </tr>
+                      <tr v-if="stockPool.length === 0">
+                        <td colspan="7" style="text-align:center;color:#9e9e9e;padding:16px;font-size:10px">No accepted stock available.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </transition>
+
         </div>
       </transition>
 
@@ -406,13 +459,18 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { stockPool } from './stock'
+import type { StockEntry } from './stock'
 
 const clock           = ref('')
 const consigneeSearch = ref('')
 const activeFilter    = ref('')
+const qcFilter        = ref('')
+const activeQcFilter  = ref('')
 const allChecked      = ref(false)
 const checkedIds      = ref<Set<number>>(new Set())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+const showStockPicker = ref(false)
 
 function tick() {
   clock.value = new Date().toLocaleString('en-MY', {
@@ -421,8 +479,12 @@ function tick() {
   })
 }
 
-function applySearch() { activeFilter.value = consigneeSearch.value.trim() }
-function resetSearch()  { consigneeSearch.value = ''; activeFilter.value = '' }
+function applySearch() { activeFilter.value = consigneeSearch.value.trim(); activeQcFilter.value = qcFilter.value }
+function resetSearch()  { consigneeSearch.value = ''; activeFilter.value = ''; qcFilter.value = ''; activeQcFilter.value = '' }
+
+function qcStatusLabel(s: string): string {
+  return ({ in_progress: 'In Progress', passed: 'Cleared', failed: 'Held' } as Record<string,string>)[s] ?? s
+}
 
 function toggleAll() {
   if (allChecked.value) filteredRows.value.forEach(r => checkedIds.value.add(r.id))
@@ -473,9 +535,15 @@ const lineItemsMap: Record<number, LineItem[]> = {
 }
 
 const filteredRows = computed(() => {
-  const q = activeFilter.value.toLowerCase()
-  if (!q) return [...rows.value]
-  return rows.value.filter(r => r.consignee.toLowerCase().includes(q))
+  const q  = activeFilter.value.toLowerCase()
+  const qc = activeQcFilter.value
+  return rows.value.filter(r => {
+    const consigneeMatch = !q || r.consignee.toLowerCase().includes(q)
+    let qcMatch = true
+    if (qc === 'none')  qcMatch = !inspectionMap[r.id]
+    else if (qc)        qcMatch = inspectionMap[r.id]?.status === qc
+    return consigneeMatch && qcMatch
+  })
 })
 
 // ── Inspection ────────────────────────────────────
@@ -484,7 +552,7 @@ interface InspLineCheck {
   packaging: 'Intact' | 'Damaged' | 'Repackaged'; halalLabel: boolean; expiryValid: boolean; notes: string
 }
 interface InspectionData {
-  status: 'pending' | 'in_progress' | 'passed' | 'failed'
+  status: 'in_progress' | 'passed' | 'failed'
   inspector: string; dispatchedAt: string; remarks: string; lineChecks: InspLineCheck[]
 }
 
@@ -494,7 +562,7 @@ const inspForm      = ref<InspectionData>({ status: 'in_progress', inspector: ''
 const inspectionMap = reactive<Record<number, InspectionData>>({})
 
 const inspStatusLabel = computed(() => {
-  const map: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', passed: 'Approved', failed: 'Rejected' }
+  const map: Record<string, string> = { in_progress: 'In Progress', passed: 'Cleared', failed: 'Held' }
   return map[inspForm.value.status] ?? inspForm.value.status
 })
 
@@ -520,7 +588,7 @@ function openInspect(row: StockOutRow) {
   const existing = inspectionMap[row.id]
   if (existing) {
     inspLineChecks.value = JSON.parse(JSON.stringify(existing.lineChecks))
-    inspForm.value = { ...existing, status: existing.status === 'pending' ? 'in_progress' : existing.status, lineChecks: [] }
+    inspForm.value = { ...existing, lineChecks: [] }
   } else {
     inspLineChecks.value = buildLineChecks(row)
     inspForm.value = {
@@ -570,7 +638,7 @@ function openEditSelected() {
   const row = rows.value.find(r => r.id === id)
   if (row) openEdit(row)
 }
-function closeDetail() { detailMode.value = null }
+function closeDetail() { detailMode.value = null; showStockPicker.value = false }
 
 function saveRecord() {
   if (detailMode.value === 'new') {
@@ -592,6 +660,17 @@ function addLineItem() {
   editLineItems.value.push({ skuCode: '', skuName: '', qty: 1, unit: 'pcs', batchNo: '', expiryDate: '' })
 }
 function removeLineItem(idx: number) { editLineItems.value.splice(idx, 1) }
+function pickStockItem(item: StockEntry) {
+  editLineItems.value.push({
+    skuCode: item.skuCode,
+    skuName: item.skuName,
+    qty: item.qty,
+    unit: item.unit,
+    batchNo: item.batchNo,
+    expiryDate: item.expiryDate,
+  })
+  showStockPicker.value = false
+}
 
 // ── Delete ────────────────────────────────────────
 const showDelete = ref(false)
@@ -605,7 +684,16 @@ function confirmDelete() {
   showDelete.value = false
 }
 
-onMounted(() => { tick(); clockTimer = setInterval(tick, 1000) })
+onMounted(() => {
+  tick()
+  clockTimer = setInterval(tick, 1000)
+  // Pre-seed sample QC statuses for concept demo
+  inspectionMap[1] = { status: 'passed',      inspector: 'Farah Lim',    dispatchedAt: '2025-10-01', remarks: 'All items verified, dispatch cleared.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 1)!) }
+  inspectionMap[4] = { status: 'failed',       inspector: 'Operator B',   dispatchedAt: '2025-12-15', remarks: 'Tomato Paste packaging compromised — dispatch held.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 4)!) }
+  inspectionMap[5] = { status: 'passed',      inspector: 'Operator A',   dispatchedAt: '2025-12-20', remarks: 'Return qty verified.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 5)!) }
+  inspectionMap[6] = { status: 'passed',      inspector: 'Saliza Rina',  dispatchedAt: '2026-01-09', remarks: 'Pallet sealed and labelled correctly.', lineChecks: buildLineChecks(rows.value.find(r => r.id === 6)!) }
+  inspectionMap[3] = { status: 'in_progress', inspector: 'Operator A',   dispatchedAt: '2025-11-30', remarks: '', lineChecks: buildLineChecks(rows.value.find(r => r.id === 3)!) }
+})
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 </script>
 
@@ -677,12 +765,20 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .badge-scan { background: #e3f2fd; color: #1565c0; }
 .badge-rfid { background: #f3e5f5; color: #7b1fa2; }
 
-/* Inspection status dot (in ID cell) */
-.insp-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 5px; vertical-align: middle; }
-.idot--pending     { background: #9e9e9e; }
-.idot--in_progress { background: #f9a825; }
-.idot--passed      { background: #43a047; }
-.idot--failed      { background: #e53935; }
+/* QC Status badges */
+.qc-badge { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.3px; display: inline-block; }
+.qc-na          { color: #bdbdbd; }
+.qc-in_progress { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
+.qc-passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.qc-failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+
+/* Failed row tint */
+tbody tr.row-fail td { background: #fff5f5 !important; }
+tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
+
+/* QC filter select */
+.f-select { border: 1px solid #c3c6d4; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 4px 8px; color: #515151; outline: none; height: 28px; background: #fff; }
+.f-select:focus { border-color: #1565c0; }
 
 /* ── Pagination ── */
 .pag-bar { background: #fff; border-top: 1px solid #c3c6d4; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -794,7 +890,6 @@ tbody tr.row-sel td { background: #e3f2fd; }
 
 /* Status chip */
 .isc { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
-.isc--pending     { background: #f5f5f5; color: #757575; border: 1px solid #bdbdbd; }
 .isc--in_progress { background: #fff9c4; color: #f57f17; border: 1px solid #f9a825; }
 .isc--passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
 .isc--failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
@@ -854,4 +949,25 @@ tbody tr.row-sel td { background: #e3f2fd; }
 .ifp-reject:hover { background: #ffcdd2; }
 .ifp-approve { background: #1565c0; color: #fff; }
 .ifp-approve:hover { background: #1976d2; }
+
+/* Stock picker overlay */
+.sp-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.5); z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.sp-modal { background: #fff; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; width: 100%; max-height: calc(100% - 32px); box-shadow: 0 4px 24px rgba(0,0,0,.2); }
+.sp-header { padding: 10px 14px; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.sp-title { font-size: 11px; font-weight: 700; color: #515151; display: flex; align-items: center; gap: 6px; }
+.sp-close { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; font-size: 12px; height: 24px; width: 24px; display: flex; align-items: center; justify-content: center; }
+.sp-close:hover { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
+.sp-hint { padding: 6px 14px; font-size: 9px; color: #9e9e9e; background: #fafafa; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+.sp-body { overflow: auto; flex: 1; }
+.sp-body::-webkit-scrollbar { width: 4px; height: 4px; }
+.sp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+.sp-table { width: 100%; border-collapse: collapse; font-size: 10px; min-width: 500px; }
+.sp-table th { background: #f5f5f5; color: #9e9e9e; font-size: 9px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid #e8e8e8; font-weight: 700; text-align: left; white-space: nowrap; position: sticky; top: 0; }
+.sp-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; color: #515151; white-space: nowrap; }
+.sp-row { cursor: pointer; }
+.sp-row:hover td { background: #e3f2fd !important; color: #1565c0; }
+.sp-fade-enter-active, .sp-fade-leave-active { transition: opacity .15s; }
+.sp-fade-enter-from, .sp-fade-leave-to { opacity: 0; }
+.li-stock-btn { background: #e8f0fe !important; border-color: #90caf9 !important; color: #1565c0 !important; }
+.li-stock-btn:hover { background: #bbdefb !important; }
 </style>
