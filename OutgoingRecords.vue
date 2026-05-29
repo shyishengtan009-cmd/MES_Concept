@@ -167,9 +167,8 @@
       <!-- ACTION BAR -->
       <div class="action-bar">
         <button class="act-btn act-new"    @click="openNew()"><i class="fa-solid fa-plus"></i> New</button>
-        <button class="act-btn act-edit"   @click="openEditSelected()" :disabled="checkedIds.size !== 1"><i class="fa-regular fa-pen-to-square"></i> Edit</button>
         <button class="act-btn act-delete" @click="openDeleteSelected()" :disabled="checkedIds.size === 0"><i class="fa-regular fa-trash-can"></i> Delete</button>
-        <button class="act-btn act-export"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
+        <button class="act-btn act-export" @click="exportToExcel"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
         <button class="act-icon-btn" style="margin-left:auto" title="Column settings"><i class="fa-solid fa-magnifying-glass"></i></button>
       </div>
 
@@ -461,6 +460,7 @@
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { stockPool } from './stock'
 import type { StockEntry } from './stock'
+import ExcelJS from 'exceljs'
 
 const clock           = ref('')
 const consigneeSearch = ref('')
@@ -682,6 +682,80 @@ function confirmDelete() {
   rows.value = rows.value.filter(r => !deleteIds.value.includes(r.id))
   checkedIds.value = new Set([...checkedIds.value].filter(id => !deleteIds.value.includes(id)))
   showDelete.value = false
+}
+
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet('Outgoing Records')
+
+  ws.columns = [
+    { header: 'ID',             key: 'id',            width: 6  },
+    { header: 'Stock Out Type', key: 'stockOutType',  width: 16 },
+    { header: 'Document',       key: 'document',      width: 14 },
+    { header: 'Order No.',      key: 'orderNo',       width: 22 },
+    { header: 'Method',         key: 'method',        width: 8  },
+    { header: 'Consignee',      key: 'consignee',     width: 24 },
+    { header: 'Goods Total',    key: 'goodsTotal',    width: 13 },
+    { header: 'SKU Total',      key: 'skuTotal',      width: 11 },
+    { header: 'Pack Unit',      key: 'packUnit',      width: 11 },
+    { header: 'Created At',     key: 'createdAt',     width: 13 },
+    { header: 'Created By',     key: 'createdBy',     width: 14 },
+    { header: 'Dispatch Check', key: 'dispatchCheck', width: 16 },
+  ]
+
+  // Style header row
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font   = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false }
+    cell.border = {
+      bottom: { style: 'medium', color: { argb: 'FF0D47A1' } },
+    }
+  })
+
+  // Add data rows
+  rows.value.forEach((r, i) => {
+    const row = ws.addRow({
+      id:            r.id,
+      stockOutType:  r.stockOutType,
+      document:      r.document,
+      orderNo:       r.orderNo || '—',
+      method:        r.method,
+      consignee:     r.consignee || '—',
+      goodsTotal:    r.goodsTotal,
+      skuTotal:      r.skuTotal,
+      packUnit:      r.packUnit || '—',
+      createdAt:     r.createdAt,
+      createdBy:     r.createdBy || '—',
+      dispatchCheck: inspectionMap[r.id] ? qcStatusLabel(inspectionMap[r.id].status) : '—',
+    })
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font      = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border    = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+    // Colour the Dispatch Check cell
+    const dcCell = row.getCell('dispatchCheck')
+    const status = inspectionMap[r.id]?.status
+    if (status === 'passed')           { dcCell.font = { ...dcCell.font as ExcelJS.Font, color: { argb: 'FF2E7D32' }, bold: true } }
+    else if (status === 'failed')      { dcCell.font = { ...dcCell.font as ExcelJS.Font, color: { argb: 'FFC62828' }, bold: true } }
+    else if (status === 'in_progress') { dcCell.font = { ...dcCell.font as ExcelJS.Font, color: { argb: 'FFE65100' }, bold: true } }
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Outgoing_Records_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 onMounted(() => {

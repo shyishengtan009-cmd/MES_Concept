@@ -216,9 +216,8 @@
       <!-- ACTION BAR -->
       <div class="action-bar">
         <button class="act-btn act-new"    @click="openNew()"><i class="fa-solid fa-plus"></i> New</button>
-        <button class="act-btn act-edit"   @click="openEditSelected()" :disabled="checkedIds.size !== 1"><i class="fa-regular fa-pen-to-square"></i> Edit</button>
         <button class="act-btn act-delete" @click="openDeleteSelected()" :disabled="checkedIds.size === 0"><i class="fa-regular fa-trash-can"></i> Delete</button>
-        <button class="act-btn act-export"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
+        <button class="act-btn act-export" @click="exportToExcel"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
         <button class="act-icon-btn" style="margin-left:auto" title="Column settings"><i class="fa-solid fa-magnifying-glass"></i></button>
       </div>
 
@@ -235,19 +234,19 @@
                 <tr>
                   <th class="col-chk"><input type="checkbox" v-model="allChecked" @change="toggleAll" /></th>
                   <th class="col-id">ID</th>
-                  <th style="min-width:105px">Stock In Type</th>
-                  <th style="min-width:105px">Document</th>
-                  <th style="min-width:135px">Order No.</th>
-                  <th style="min-width:65px">Method</th>
-                  <th style="min-width:145px">SKU</th>
-                  <th style="min-width:78px">Pack Unit</th>
-                  <th style="min-width:145px">Supplier</th>
-                  <th style="min-width:82px">Warehouse</th>
-                  <th style="min-width:82px">Location</th>
-                  <th style="min-width:82px;text-align:right">Goods Total</th>
-                  <th style="min-width:100px">Created At</th>
-                  <th style="min-width:88px">Created By</th>
-                  <th style="min-width:90px;text-align:center">QC Status</th>
+                  <th style="min-width:84px">Stock In Type</th>
+                  <th style="min-width:78px">Document</th>
+                  <th style="min-width:100px">Order No.</th>
+                  <th style="min-width:56px">Method</th>
+                  <th style="min-width:110px">SKU</th>
+                  <th style="min-width:62px">Pack Unit</th>
+                  <th style="min-width:110px">Supplier</th>
+                  <th style="min-width:60px">Warehouse</th>
+                  <th style="min-width:64px">Location</th>
+                  <th style="min-width:64px;text-align:right">Goods Total</th>
+                  <th style="min-width:78px">Created At</th>
+                  <th style="min-width:70px">Created By</th>
+                  <th style="min-width:76px;text-align:center">QC Status</th>
                   <th class="col-actions">Actions</th>
                 </tr>
               </thead>
@@ -458,6 +457,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { addToStockPool, removeFromStockPool } from './stock'
+import ExcelJS from 'exceljs'
 
 const clock          = ref('')
 const supplierSearch = ref('')
@@ -721,6 +721,84 @@ function lcRowClass(lc: InspLineCheck) {
   return ''
 }
 
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet('Incoming Records')
+
+  ws.columns = [
+    { header: 'ID',            key: 'id',            width: 6  },
+    { header: 'Stock In Type', key: 'stockInType',   width: 16 },
+    { header: 'Document',      key: 'document',      width: 14 },
+    { header: 'Order No.',     key: 'orderNo',       width: 20 },
+    { header: 'Method',        key: 'method',        width: 8  },
+    { header: 'SKU',           key: 'sku',           width: 26 },
+    { header: 'Pack Unit',     key: 'packUnit',      width: 11 },
+    { header: 'Supplier',      key: 'supplier',      width: 24 },
+    { header: 'Warehouse',     key: 'warehouse',     width: 11 },
+    { header: 'Location',      key: 'location',      width: 11 },
+    { header: 'Goods Total',   key: 'goodsTotal',    width: 13 },
+    { header: 'Created At',    key: 'createdAt',     width: 13 },
+    { header: 'Created By',    key: 'createdBy',     width: 14 },
+    { header: 'QC Status',     key: 'qcStatus',      width: 14 },
+  ]
+
+  // Style header row
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font   = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false }
+    cell.border = {
+      bottom: { style: 'medium', color: { argb: 'FF0D47A1' } },
+    }
+  })
+
+  // Add data rows
+  rows.value.forEach((r, i) => {
+    const row = ws.addRow({
+      id:          r.id,
+      stockInType: r.stockInType,
+      document:    r.document,
+      orderNo:     r.orderNo || '—',
+      method:      r.method,
+      sku:         r.skuName || '—',
+      packUnit:    r.packageUnit || '—',
+      supplier:    r.supplierName || '—',
+      warehouse:   r.warehouseName,
+      location:    r.warehousePositionName,
+      goodsTotal:  r.goodsTotal,
+      createdAt:   r.createdAt,
+      createdBy:   r.createdBy || '—',
+      qcStatus:    inspectionMap[r.id] ? qcStatusLabel(inspectionMap[r.id].status) : '—',
+    })
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font      = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border    = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+    // Colour the QC Status cell
+    const qcCell = row.getCell('qcStatus')
+    const status = inspectionMap[r.id]?.status
+    if (status === 'passed')      { qcCell.font = { ...qcCell.font as ExcelJS.Font, color: { argb: 'FF2E7D32' }, bold: true } }
+    else if (status === 'failed') { qcCell.font = { ...qcCell.font as ExcelJS.Font, color: { argb: 'FFC62828' }, bold: true } }
+    else if (status === 'in_progress') { qcCell.font = { ...qcCell.font as ExcelJS.Font, color: { argb: 'FFE65100' }, bold: true } }
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Incoming_Records_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
   tick()
   clockTimer = setInterval(tick, 1000)
@@ -859,16 +937,16 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .tbl-wrap { flex: 1; overflow: auto; }
 .tbl-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
 .tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1200px; }
-th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
-td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; color: #515151; white-space: nowrap; font-size: 11px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 900px; }
+th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 5px 7px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
+td { padding: 5px 7px; border-bottom: 1px solid #e8e8e8; color: #515151; white-space: nowrap; font-size: 11px; }
 tbody tr:nth-child(even) td { background: #f9f9f9; }
 tbody tr.row-clickable { cursor: pointer; }
 tbody tr.row-clickable:hover td { background: #e3f2fd !important; }
 tbody tr.row-sel td { background: #e3f2fd; }
 tbody tr.row-fail td { background: #fff5f5 !important; }
 tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
-.col-chk { width: 36px; text-align: center; } .col-id { width: 56px; text-align: center; font-weight: 700; } .col-actions { width: 88px; text-align: center; }
+.col-chk { width: 30px; text-align: center; } .col-id { width: 40px; text-align: center; font-weight: 700; } .col-actions { width: 72px; text-align: center; }
 .dash { color: #c3c6d4; }
 .row-edit, .row-del, .row-correct { cursor: pointer; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; line-height: 1.8; }
 .row-edit    { color: #1565c0; } .row-edit:hover    { text-decoration: underline; }

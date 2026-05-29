@@ -6,6 +6,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "vue": "^3.4.0"
   },
   "devDependencies": {
