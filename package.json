@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
+    "mqtt": "^5.15.1",
     "vue": "^3.4.0"
   },
   "devDependencies": {

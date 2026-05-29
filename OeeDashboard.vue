@@ -245,6 +245,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { mqttSubscribe, mqttUnsubscribe } from './src/mqttService'
 
 type Line = 'ffs' | 'batch'
 
@@ -481,11 +482,30 @@ function switchLine(l: Line) {
   }
 }
 
+// ── MQTT handlers ───────────────────────────────────────────────
+function onFfsAvl(v: string)   { avlTarget.value  = parseFloat(v) }
+function onFfsPerf(v: string)  { perfTarget.value = parseFloat(v) }
+function onFfsQual(v: string)  { qualTarget.value = parseFloat(v) }
+function onFfsPack(v: string)  { packCount.value  = parseInt(v) }
+function onFfsSpeed(v: string) { lineSpeed.value  = parseInt(v) }
+function onBatchAvl(v: string)  { if (line.value === 'batch') avlTarget.value  = parseFloat(v) }
+function onBatchPerf(v: string) { if (line.value === 'batch') perfTarget.value = parseFloat(v) }
+function onBatchQual(v: string) { if (line.value === 'batch') qualTarget.value = parseFloat(v) }
+
 onMounted(() => {
   resizeCanvas()
   window.addEventListener('resize', resizeCanvas)
   gaugeLoop()
   startIntervals()
+  // MQTT subscriptions — override timer values when broker data arrives
+  mqttSubscribe('hias/oee/ffs/availability', onFfsAvl)
+  mqttSubscribe('hias/oee/ffs/performance',  onFfsPerf)
+  mqttSubscribe('hias/oee/ffs/quality',      onFfsQual)
+  mqttSubscribe('hias/oee/ffs/packcount',    onFfsPack)
+  mqttSubscribe('hias/oee/ffs/linespeed',    onFfsSpeed)
+  mqttSubscribe('hias/oee/batch/availability', onBatchAvl)
+  mqttSubscribe('hias/oee/batch/performance',  onBatchPerf)
+  mqttSubscribe('hias/oee/batch/quality',      onBatchQual)
 })
 
 onBeforeUnmount(() => {
@@ -495,6 +515,14 @@ onBeforeUnmount(() => {
   if (trendTimer)  clearInterval(trendTimer)
   if (alarmTimer)  clearInterval(alarmTimer)
   window.removeEventListener('resize', resizeCanvas)
+  mqttUnsubscribe('hias/oee/ffs/availability', onFfsAvl)
+  mqttUnsubscribe('hias/oee/ffs/performance',  onFfsPerf)
+  mqttUnsubscribe('hias/oee/ffs/quality',      onFfsQual)
+  mqttUnsubscribe('hias/oee/ffs/packcount',    onFfsPack)
+  mqttUnsubscribe('hias/oee/ffs/linespeed',    onFfsSpeed)
+  mqttUnsubscribe('hias/oee/batch/availability', onBatchAvl)
+  mqttUnsubscribe('hias/oee/batch/performance',  onBatchPerf)
+  mqttUnsubscribe('hias/oee/batch/quality',      onBatchQual)
 })
 </script>
 

@@ -142,6 +142,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { mqttSubscribe, mqttUnsubscribe } from './src/mqttService'
 
 type View = 'both' | 'mes' | 'wes'
 
@@ -260,15 +261,35 @@ function agvBadge(status: string): string {
   return 'b-blue'
 }
 
+// ── MQTT handlers ────────────────────────────────────────────────
+function onWoProgress(v: string) {
+  const wo = workOrders.value.find(w => w.order === 'WO-2026-041')
+  if (wo) wo.progress = parseInt(v)
+}
+function onWesStorage(v: string)   { wesFlow.value.storage = parseInt(v) }
+function onWesPicking(v: string)   { wesFlow.value.picking = parseInt(v) }
+function onAgv01Battery(v: string) {
+  const agv = agvStatus.value.find(a => a.unit === 'AGV Unit 01')
+  if (agv) agv.battery = `${parseInt(v)}%`
+}
+
 onMounted(() => {
   tick()
   clockTimer = setInterval(tick, 1000)
   liveTimer  = setInterval(liveUpdate, 17000)
+  mqttSubscribe('hias/mes/wo/WO-2026-041/progress', onWoProgress)
+  mqttSubscribe('hias/wes/storage',                 onWesStorage)
+  mqttSubscribe('hias/wes/picking',                 onWesPicking)
+  mqttSubscribe('hias/wes/agv01/battery',           onAgv01Battery)
 })
 
 onBeforeUnmount(() => {
   if (clockTimer) clearInterval(clockTimer)
   if (liveTimer)  clearInterval(liveTimer)
+  mqttUnsubscribe('hias/mes/wo/WO-2026-041/progress', onWoProgress)
+  mqttUnsubscribe('hias/wes/storage',                 onWesStorage)
+  mqttUnsubscribe('hias/wes/picking',                 onWesPicking)
+  mqttUnsubscribe('hias/wes/agv01/battery',           onAgv01Battery)
 })
 </script>
 

@@ -346,6 +346,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { mqttSubscribe, mqttUnsubscribe } from './src/mqttService'
 
 const activeTab = ref<'indoor' | 'outdoor'>('indoor')
 const clock     = ref('')
@@ -455,15 +456,47 @@ function badgeClass(status: string): string {
   return 'badge-idle'
 }
 
+// ── MQTT handlers ────────────────────────────────────────────────
+function onM01fw(v: string)  { m01.fw = parseFloat(v).toFixed(1) }
+function onM01st(v: string)  { m01.st = parseFloat(v).toFixed(1) }
+function onM02fw(v: string)  { m02.fw = parseFloat(v).toFixed(1) }
+function onM02st(v: string)  { m02.st = parseFloat(v).toFixed(1) }
+function onM03fw(v: string)  { m03.fw = parseFloat(v).toFixed(1) }
+function onM03st(v: string)  { m03.st = parseFloat(v).toFixed(1) }
+function onBp01bw(v: string) { bp01.bw = parseInt(v) }
+function onBp01rpm(v: string){ bp01.rpm = parseFloat(v).toFixed(1) }
+function onBp02bw(v: string) { bp02.bw = parseInt(v) }
+function onBp02rpm(v: string){ bp02.rpm = parseFloat(v).toFixed(1) }
+
 onMounted(() => {
   tick()
   clockTimer = setInterval(tick, 1000)
   liveTimer  = setInterval(liveUpdate, 17000)
+  mqttSubscribe('hias/shopfloor/m01/fillweight',    onM01fw)
+  mqttSubscribe('hias/shopfloor/m01/sealtemp',      onM01st)
+  mqttSubscribe('hias/shopfloor/m02/fillweight',    onM02fw)
+  mqttSubscribe('hias/shopfloor/m02/sealtemp',      onM02st)
+  mqttSubscribe('hias/shopfloor/m03/fillweight',    onM03fw)
+  mqttSubscribe('hias/shopfloor/m03/sealtemp',      onM03st)
+  mqttSubscribe('hias/shopfloor/bp01/batchweight',  onBp01bw)
+  mqttSubscribe('hias/shopfloor/bp01/rpm',          onBp01rpm)
+  mqttSubscribe('hias/shopfloor/bp02/batchweight',  onBp02bw)
+  mqttSubscribe('hias/shopfloor/bp02/rpm',          onBp02rpm)
 })
 
 onBeforeUnmount(() => {
   if (clockTimer) clearInterval(clockTimer)
   if (liveTimer)  clearInterval(liveTimer)
+  mqttUnsubscribe('hias/shopfloor/m01/fillweight',   onM01fw)
+  mqttUnsubscribe('hias/shopfloor/m01/sealtemp',     onM01st)
+  mqttUnsubscribe('hias/shopfloor/m02/fillweight',   onM02fw)
+  mqttUnsubscribe('hias/shopfloor/m02/sealtemp',     onM02st)
+  mqttUnsubscribe('hias/shopfloor/m03/fillweight',   onM03fw)
+  mqttUnsubscribe('hias/shopfloor/m03/sealtemp',     onM03st)
+  mqttUnsubscribe('hias/shopfloor/bp01/batchweight', onBp01bw)
+  mqttUnsubscribe('hias/shopfloor/bp01/rpm',         onBp01rpm)
+  mqttUnsubscribe('hias/shopfloor/bp02/batchweight', onBp02bw)
+  mqttUnsubscribe('hias/shopfloor/bp02/rpm',         onBp02rpm)
 })
 </script>
 

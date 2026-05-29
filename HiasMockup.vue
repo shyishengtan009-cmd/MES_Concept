@@ -46,6 +46,14 @@
       </div>
     </header>
 
+    <!-- MQTT STATUS BAR -->
+    <div class="mqtt-status-bar" :class="`mqtt-${mqttStatus}`">
+      <span class="mqtt-dot"></span>
+      <span v-if="mqttStatus === 'connected'">MQTT Connected &mdash; broker: REDACTED-BROKER-HOST</span>
+      <span v-else-if="mqttStatus === 'connecting'">MQTT Connecting&hellip;</span>
+      <span v-else>MQTT Disconnected &mdash; broker unreachable</span>
+    </div>
+
     <!-- BODY -->
     <div class="hias-body" :class="{ 'sidebar-hidden': !showSidebar }">
 
@@ -124,6 +132,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { mqttStatus } from './src/mqttService'
 import OeeMain          from './OeeMain.vue'
 import Inventory        from './Inventory.vue'
 import CostAnalysis     from './CostAnalysis.vue'
@@ -208,6 +217,29 @@ function isActiveChild (child: string){ return activeChild.value === child }
   background: #f5f5f5;
   overflow: hidden;
 }
+
+/* ── MQTT Status Bar ── */
+.mqtt-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 22px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.mqtt-connected    { background: #e8f5e9; color: #2e7d32; border-bottom: 1px solid #a5d6a7; }
+.mqtt-connecting   { background: #fff8e1; color: #f57f17; border-bottom: 1px solid #ffe082; }
+.mqtt-disconnected { background: #ffebee; color: #c62828; border-bottom: 1px solid #ef9a9a; }
+.mqtt-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.mqtt-connected    .mqtt-dot { background: #43a047; animation: mqtt-pulse 1.4s infinite; }
+.mqtt-connecting   .mqtt-dot { background: #ffa000; animation: mqtt-pulse 0.8s infinite; }
+.mqtt-disconnected .mqtt-dot { background: #e53935; }
+@keyframes mqtt-pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
 
 /* ── Top Nav ── */
 .hias-topnav {
