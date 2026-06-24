@@ -16,14 +16,15 @@
           <option v-for="l in lines" :key="l" :value="l">{{ l }}</option>
         </select>
         <button class="btn-primary"><i class="fa-solid fa-plus"></i> Schedule WO</button>
+        <button class="btn-outline-sm" @click="exportToExcel"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
       </div>
     </div>
 
     <!-- KPI Strip -->
     <div class="kpi-strip">
       <div class="kc" v-for="k in kpis" :key="k.label">
-        <div class="kc-val" :class="k.cls">{{ k.val }}</div>
         <div class="kc-lbl">{{ k.label }}</div>
+        <div class="kc-val" :class="k.cls">{{ k.val }}</div>
       </div>
     </div>
 
@@ -116,6 +117,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ExcelJS from 'exceljs'
 
 interface WOBlock { woNo: string; product: string; qty: number; status: string; line: string; day: string; soRef: string; progress: number }
 
@@ -217,14 +219,61 @@ function openDetail(wo: WOBlock) { detail.value = wo }
 function woCls(s: string) {
   return { 'b-blue': s==='running', 'b-green': s==='completed', 'b-amber': s==='planned', 'b-red': s==='on-hold' }
 }
+
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet('Production Planning')
+
+  ws.columns = [
+    { header: 'WO Number', key: 'woNo',   width: 16 },
+    { header: 'Product',   key: 'product', width: 28 },
+    { header: 'Line',      key: 'line',    width: 16 },
+    { header: 'Day',       key: 'day',     width: 10 },
+    { header: 'Qty',       key: 'qty',     width: 10 },
+    { header: 'SO Reference', key: 'soRef', width: 16 },
+    { header: 'Status',    key: 'status',  width: 12 },
+  ]
+
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left' }
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } }
+  })
+
+  const allRows = visibleLines.value.flatMap(line => weekDays.value.flatMap(d => getCell(line, d.key)))
+  allRows.forEach((w, i) => {
+    const row = ws.addRow(w)
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Production_Planning_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; }
 .root { height: 100%; display: flex; flex-direction: column; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; overflow: hidden; }
 
-.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
-.pg-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #515151; flex-shrink: 0; }
+.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.pg-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; flex-shrink: 0; }
 .topbar-right { display: flex; gap: 6px; margin-left: auto; align-items: center; }
 
 .week-nav { align-items: center; display: flex; gap: 6px; }
@@ -233,15 +282,19 @@ function woCls(s: string) {
 .nav-btn:hover { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
 
 .sel { border: 1px solid #d0d3e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 4px 8px; color: #515151; background: #fff; }
-.btn-primary { background: #1565c0; border: none; border-radius: 3px; color: #fff; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 12px; }
-.btn-primary:hover { background: #1976d2; }
+.btn-primary { background: linear-gradient(135deg, #1976d2, #0d47a1); border: none; border-radius: 3px; color: #fff; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 12px; transition: transform .12s ease, box-shadow .12s ease; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 .btn-outline-sm { background: #fff; border: 1px solid #d0d3e0; border-radius: 3px; color: #515151; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; padding: 5px 10px; }
 .btn-outline-sm:hover { background: #f5f5f5; }
 
-.kpi-strip { background: #c3c6d4; display: flex; gap: 1px; flex-shrink: 0; }
-.kc { background: #fff; flex: 1; padding: 8px 12px; }
-.kc-val { font-size: 20px; font-weight: 700; }
-.kc-lbl { font-size: 10px; color: #757575; margin-top: 1px; }
+.kpi-strip { background: #c3c6d4; display: flex; gap: 1px; flex-shrink: 0; border-bottom: 2px solid #c3c6d4; }
+.kc { background: #fff; flex: 1; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kc:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kc::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kc::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kc-lbl { font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.kc-val { font-size: 22px; font-weight: 800; position: relative; z-index: 1; }
 .c-blue   { color: #1565c0; } .c-green { color: #388E3C; }
 .c-amber  { color: #f9a825; } .c-red   { color: #e53935; }
 

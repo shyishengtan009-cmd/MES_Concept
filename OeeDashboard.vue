@@ -1,6 +1,12 @@
 <template>
   <div class="oee-root">
 
+    <!-- TOPBAR -->
+    <div class="oee-topbar">
+      <span class="oee-title">&#9632; OEE Dashboard</span>
+      <div class="oee-live"><span class="live-dot"></span> LIVE | {{ clock }}</div>
+    </div>
+
     <!-- Line tabs -->
     <div class="page-tabs">
       <button class="page-tab" :class="{ active: line === 'ffs'   }" @click="switchLine('ffs')">&#9654; FFS Packaging</button>
@@ -399,6 +405,12 @@ function drawChart() {
 }
 
 // ── Animation frame ──────────────────────────────────────────────
+const clock = ref('')
+let clockTimer: ReturnType<typeof setInterval> | null = null
+function tick() {
+  clock.value = new Date().toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
 let rafId: number | null = null
 
 function gaugeLoop() {
@@ -413,11 +425,6 @@ let dotTimer:    ReturnType<typeof setInterval> | null = null
 let sensorTimer: ReturnType<typeof setInterval> | null = null
 let trendTimer:  ReturnType<typeof setInterval> | null = null
 let alarmTimer:  ReturnType<typeof setInterval> | null = null
-
-function rnd(base: number, delta: number, dec: number) {
-  const v = base + (Math.random() * 2 - 1) * delta
-  return dec > 0 ? v.toFixed(dec) : String(Math.round(v))
-}
 
 function startIntervals() {
   dotTimer = setInterval(() => {
@@ -493,6 +500,8 @@ function onBatchPerf(v: string) { if (line.value === 'batch') perfTarget.value =
 function onBatchQual(v: string) { if (line.value === 'batch') qualTarget.value = parseFloat(v) }
 
 onMounted(() => {
+  tick()
+  clockTimer = setInterval(tick, 1000)
   resizeCanvas()
   window.addEventListener('resize', resizeCanvas)
   gaugeLoop()
@@ -509,6 +518,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer)
   if (rafId !== null) cancelAnimationFrame(rafId)
   if (dotTimer)    clearInterval(dotTimer)
   if (sensorTimer) clearInterval(sensorTimer)
@@ -531,6 +541,13 @@ onBeforeUnmount(() => {
 
 .oee-root { height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; color: #333; display: flex; flex-direction: column; }
 
+/* Topbar */
+.oee-topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 0 16px; display: flex; align-items: center; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); height: 42px; }
+.oee-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+.oee-live { margin-left: auto; display: flex; align-items: center; font-size: 10px; color: #9e9e9e; gap: 6px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #43a047; animation: oee-pulse 1.4s infinite; display: inline-block; }
+@keyframes oee-pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
+
 /* Page tabs */
 .page-tabs { display: flex; gap: 0; flex-shrink: 0; background: #ffffff; border-bottom: 2px solid #c3c6d4; }
 .page-tab  { padding: 6px 22px; font-size: 12px; font-weight: 600; color: #7f7f7f; background: #fff; border: none; cursor: pointer; border-right: 1px solid #e0e0e0; letter-spacing: 0.4px; transition: background .15s, color .15s; }
@@ -539,10 +556,14 @@ onBeforeUnmount(() => {
 
 /* KPI Banner */
 .kpi-row  { display: flex; gap: 1px; flex-shrink: 0; background: #c3c6d4; border-bottom: 2px solid #c3c6d4; }
-.kpi-card { flex: 1; background: #ffffff; padding: 4px 12px; display: flex; flex-direction: column; gap: 0; }
+.kpi-card { flex: 1; background: #ffffff; padding: 4px 12px; display: flex; flex-direction: column; gap: 0; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 4px; top: 0px; font-size: 30px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .kpi-main { flex: 1.3; border-right: 2px solid #c3c6d4; }
-.kpi-label { font-size: 9px; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.5px; }
-.kpi-value { font-size: 20px; font-weight: 700; line-height: 1.15; }
+.kpi-label { font-size: 9px; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.kpi-value { font-size: 20px; font-weight: 800; line-height: 1.15; position: relative; z-index: 1; }
 .kpi-unit  { font-size: 11px; font-weight: 400; color: #b0b0b0; }
 .kpi-sub   { font-size: 9px; color: #b0b0b0; margin-top: 1px; }
 .kpi-green  { color: #388E3C; } .kpi-blue { color: #1565c0; } .kpi-amber { color: #f9a825; } .kpi-orange { color: #f57c00; }

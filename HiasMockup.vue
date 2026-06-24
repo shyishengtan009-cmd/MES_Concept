@@ -112,12 +112,16 @@
 
       <!-- PAGE CONTENT -->
       <div class="hias-page-container">
-        <OeeMain          v-if="currentPage === 'oee-main'"           />
-        <Inventory        v-if="currentPage === 'inventory'"          />
-        <CostAnalysis     v-if="currentPage === 'cost-analysis'"      />
-        <IncomingRecords  v-if="currentPage === 'inventory-incoming'" />
-        <OutgoingRecords  v-if="currentPage === 'inventory-outgoing'" />
-        <ProductionMain   v-if="currentPage === 'production'"         />
+        <OeeMain                v-if="currentPage === 'oee-main'"           />
+        <Inventory              v-if="currentPage === 'inventory'"          />
+        <IncomingRecords        v-if="currentPage === 'inventory-incoming'" />
+        <OutgoingRecords        v-if="currentPage === 'inventory-outgoing'" />
+        <ProductionMain         v-if="currentPage === 'production'"         />
+        <DocumentMain           v-if="currentPage === 'mes-document'"       />
+        <InventoryMain          v-if="currentPage === 'mes-inventory'"      />
+        <KnowledgeRetentionMain v-if="currentPage === 'mes-knowledge'"      />
+        <PurchasingMain         v-if="currentPage === 'mes-purchasing'"     />
+        <EsgMain                v-if="currentPage === 'mes-esg'"            />
       </div>
 
     </div><!-- /.hias-body -->
@@ -133,12 +137,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { mqttStatus } from './src/mqttService'
-import OeeMain          from './OeeMain.vue'
-import Inventory        from './Inventory.vue'
-import CostAnalysis     from './CostAnalysis.vue'
-import IncomingRecords  from './IncomingRecords.vue'
-import OutgoingRecords  from './OutgoingRecords.vue'
-import ProductionMain   from './ProductionMain.vue'
+import OeeMain                from './OeeMain.vue'
+import Inventory              from './Inventory.vue'
+import IncomingRecords        from './IncomingRecords.vue'
+import OutgoingRecords        from './OutgoingRecords.vue'
+import ProductionMain         from './ProductionMain.vue'
+import DocumentMain           from './DocumentMain.vue'
+import InventoryMain          from './InventoryMain.vue'
+import KnowledgeRetentionMain from './KnowledgeRetentionMain.vue'
+import PurchasingMain         from './PurchasingMain.vue'
+import EsgMain                from './EsgMain.vue'
 
 const corporateFareSVG = `<svg xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="23px" viewBox="0 0 24 24" width="23px"><rect fill="none" height="24" width="24"/><path fill="currentColor" d="M12,7V3H2v18h20V7H12z M10,19H4v-2h6V19z M10,15H4v-2h6V15z M10,11H4V9h6V11z M10,7H4V5h6V7z M20,19h-8V9h8V19z M18,11h-4v2h4V11z M18,15h-4v2h4V15z"/></svg>`
 const userAvatarSVG    = `<svg width="24px" height="24px" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`
@@ -150,13 +158,21 @@ const activeParent = ref('MES')
 const activeChild  = ref('Dashboard')
 const currentPage  = ref('oee-main')
 
+// Keyed by "parent::child" to avoid collisions between menus that reuse the same child label
+// (e.g. "Inventory" appears both as a top-level Inventory child and as an MES child).
+// Top-level leaf items (no parent) are keyed by their own name.
 const pageMap: Record<string, string> = {
-  'Dashboard':         'oee-main',
-  'Cost Analysis':     'cost-analysis',
-  'Inventory':         'inventory',
-  'Incoming Records':  'inventory-incoming',
-  'Outgoing Records':  'inventory-outgoing',
-  'Production':        'production',
+  'Dashboard':                    'oee-main',
+  'Inventory::Inventory':         'inventory',
+  'Inventory::Incoming Records':  'inventory-incoming',
+  'Inventory::Outgoing Records':  'inventory-outgoing',
+  'MES::Dashboard':               'oee-main',
+  'MES::Document':                'mes-document',
+  'MES::Production':              'production',
+  'MES::Inventory':               'mes-inventory',
+  'MES::Knowledge Retention':     'mes-knowledge',
+  'MES::Purchasing':              'mes-purchasing',
+  'MES::ESG':                     'mes-esg',
 }
 
 type MenuItem = { name: string; icon: string; children: { name: string; icon?: string }[] }
@@ -170,7 +186,7 @@ const menus: MenuItem[] = [
   { name: 'AI Matching',               icon: 'fa-solid fa-wand-magic-sparkles',  children: [{ name: 'Smart Matching' }, { name: 'Matching Settings' }] },
   { name: 'Operation',                 icon: 'fa-solid fa-briefcase',            children: [{ name: 'Product' }, { name: 'Raw Material' }, { name: 'Manufacturing' }] },
   { name: 'Purchasing',                icon: 'fa-solid fa-file-invoice-dollar',  children: [{ name: 'Supplier' }, { name: 'Purchase Order' }] },
-  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: [{ name: 'Dashboard' }, { name: 'Cost Analysis' }, { name: 'Production' }] },
+  { name: 'MES',                       icon: 'fa-solid fa-diagram-project',      children: [{ name: 'Dashboard' }, { name: 'Document' }, { name: 'Production' }, { name: 'Inventory' }, { name: 'Knowledge Retention' }, { name: 'Purchasing' }, { name: 'ESG' }] },
   { name: 'Inventory',                 icon: 'fa-solid fa-warehouse',            children: [{ name: 'Inventory' }, { name: 'Incoming Records' }, { name: 'Outgoing Records' }] },
   { name: 'Collaborator',              icon: 'fa-solid fa-building',             children: [{ name: 'Collaborator List' }, { name: 'Collaboration Requests' }] },
   { name: 'Report',                    icon: 'fa-solid fa-list',                 children: [{ name: 'Audit Report' }, { name: 'Compliance Report' }, { name: 'Export Report' }] },
@@ -197,7 +213,8 @@ function toggleMenu(name: string, hasChildren: boolean) {
 function selectChild(child: string, parent: string) {
   activeChild.value  = child
   activeParent.value = parent
-  if (pageMap[child]) currentPage.value = pageMap[child]
+  const key = `${parent}::${child}`
+  if (pageMap[key]) currentPage.value = pageMap[key]
 }
 
 function isOpen        (name: string) { return openMenus.value.includes(name) }

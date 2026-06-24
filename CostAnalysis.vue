@@ -11,6 +11,7 @@
       </div>
       <div class="topbar-right">
         <button v-for="p in periods" :key="p" class="per-btn" :class="{ on: period === p }" @click="period = p">{{ p }}</button>
+        <button class="export-btn" @click="exportToExcel"><i class="fa-solid fa-arrow-up-from-bracket"></i> Export</button>
       </div>
     </div>
 
@@ -166,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ExcelJS from 'exceljs'
 
 type Tab = 'overview' | 'material' | 'overhead'
 
@@ -181,6 +183,48 @@ const breakdown = [
   { name: 'Maintenance',   pct: 6.3,  barPct: 17,  value: 'RM 17,900',  color: '#f9a825' },
   { name: 'Other',         pct: 3.1,  barPct: 11,  value: 'RM 8,900',   color: '#9e9e9e' },
 ]
+
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet(`Cost Breakdown (${period.value})`)
+
+  ws.columns = [
+    { header: 'Category', key: 'name',  width: 18 },
+    { header: '% of Total', key: 'pct', width: 12 },
+    { header: 'Value',    key: 'value', width: 16 },
+  ]
+
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left' }
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } }
+  })
+
+  breakdown.forEach((b, i) => {
+    const row = ws.addRow({ name: b.name, pct: b.pct, value: b.value })
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Cost_Analysis_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const budgetVsActual = [
   { name: 'Raw Materials',  budget: 'RM 142,000', actual: 'RM 149,200', variance: '+5.1%',  over: true,  budgetBarPct: 100, actualBarPct: 105 },
@@ -258,14 +302,20 @@ function overLabel(row: { over: boolean; variance: string }): string {
 .per-btn:first-child { border-radius: 3px 0 0 3px; }
 .per-btn:last-child  { border-right: 1px solid #c3c6d4; border-radius: 0 3px 3px 0; }
 .per-btn.on          { background: #1565c0; border-color: #1565c0; color: #fff; }
+.export-btn { margin-left: 10px; background: #1565c0; color: #fff; border: none; border-radius: 4px; padding: 5px 12px; font-family: 'Poppins', sans-serif; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background .12s; }
+.export-btn:hover { background: #0d47a1; }
 .per-btn:hover:not(.on) { background: #e3f2fd; color: #1565c0; }
 
 .tab-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
 
 .kpi-row  { display: flex; gap: 1px; background: #c3c6d4; border-bottom: 2px solid #c3c6d4; flex-shrink: 0; }
-.kpi-card { flex: 1; background: #fff; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; }
-.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; }
-.kpi-val  { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi-card { flex: 1; background: #fff; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.kpi-val  { font-size: 22px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
 .kpi-sub  { font-size: 10px; color: #9e9e9e; display: flex; align-items: center; gap: 3px; }
 .c-g   { color: #388E3C; } .c-b { color: #1565c0; } .c-y { color: #f9a825; } .c-r { color: #e53935; } .c-d { color: #515151; } .c-pur { color: #7b1fa2; }
 .t-up  { color: #e53935; } .t-dn { color: #388E3C; }
@@ -283,11 +333,11 @@ function overLabel(row: { over: boolean; variance: string }): string {
 .pc { background: #fff; border: 1px solid #c3c6d4; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .ph { padding: 8px 12px; font-size: 11px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between; }
 .ph-r { font-size: 10px; font-weight: 400; color: #9e9e9e; text-transform: none; letter-spacing: 0; }
-.pc-body { padding: 10px 12px; overflow-y: auto; flex: 1; }
+.pc-body { padding: 10px 12px; overflow-y: auto; overflow-x: hidden; flex: 1; }
 .pc-body::-webkit-scrollbar { width: 4px; }
 .pc-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 
-.tbl-wrap { flex: 1; overflow-y: auto; }
+.tbl-wrap { flex: 1; overflow-y: auto; overflow-x: hidden; }
 .tbl-wrap::-webkit-scrollbar { width: 4px; }
 .tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 table { width: 100%; border-collapse: collapse; font-size: 11px; }

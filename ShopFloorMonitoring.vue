@@ -4,10 +4,7 @@
     <!-- TOPBAR -->
     <div class="top-bar">
       <span class="page-title">&#9632; Shop Floor Monitoring</span>
-      <div class="line-tabs">
-        <button class="line-tab" :class="{ active: activeTab === 'indoor'  }" @click="activeTab = 'indoor'">&#9654; FFS Packaging Line (Indoors)</button>
-        <button class="line-tab" :class="{ active: activeTab === 'outdoor' }" @click="activeTab = 'outdoor'">&#9654; Batching Plant (Outdoors)</button>
-      </div>
+      <SegmentedToggle :tabs="lineTabs" v-model="activeTab" />
       <div class="top-bar-right">
         <span class="live-dot"></span>
         <span>LIVE &nbsp;|&nbsp; {{ clock }}</span>
@@ -347,8 +344,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { mqttSubscribe, mqttUnsubscribe } from './src/mqttService'
+import SegmentedToggle from './SegmentedToggle.vue'
 
 const activeTab = ref<'indoor' | 'outdoor'>('indoor')
+
+const lineTabs = [
+  { id: 'indoor',  label: '▶ FFS Packaging Line (Indoors)' },
+  { id: 'outdoor', label: '▶ Batching Plant (Outdoors)' },
+] as const
 const clock     = ref('')
 let clockTimer: ReturnType<typeof setInterval> | null = null
 let liveTimer:  ReturnType<typeof setInterval> | null = null
@@ -505,22 +508,22 @@ onBeforeUnmount(() => {
 
 .sfm-root { height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; color: #333; display: flex; flex-direction: column; }
 
-.top-bar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.top-bar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 0 16px; height: 42px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .page-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; }
-.line-tabs  { display: flex; gap: 0; margin-left: 16px; border-bottom: 2px solid #c3c6d4; align-self: stretch; }
-.line-tab   { background: #fff; border: none; border-right: 1px solid #e0e0e0; color: #7f7f7f; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600; padding: 6px 18px; transition: background .15s, color .15s; letter-spacing: 0.4px; }
-.line-tab:hover  { background: #f2f2f2; color: #333; }
-.line-tab.active { background: #fff; color: #333; border-bottom: 2px solid #1565c0; margin-bottom: -2px; }
-.top-bar-right { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #7f7f7f; margin-left: auto; }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #43a047; display: inline-block; animation: blink 1.4s ease-in-out infinite; }
+.top-bar-right { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #9e9e9e; margin-left: auto; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #43a047; display: inline-block; animation: blink 1.4s ease-in-out infinite; }
 @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:.2 } }
 
 .tab-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
 
 .kpi-row  { display: flex; gap: 1px; background: #c3c6d4; border-bottom: 2px solid #c3c6d4; flex-shrink: 0; }
-.kpi-card { flex: 1; background: #ffffff; padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; }
-.kpi-label { font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.6px; }
-.kpi-value { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi-card { flex: 1; background: #ffffff; padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-label { font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.6px; position: relative; z-index: 1; }
+.kpi-value { font-size: 22px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
 .kpi-sub   { font-size: 10px; color: #9e9e9e; }
 .kpi-green  { color: #388E3C; } .kpi-blue { color: #1565c0; } .kpi-red { color: #e53935; } .kpi-yellow { color: #f9a825; } .kpi-white { color: #333; }
 

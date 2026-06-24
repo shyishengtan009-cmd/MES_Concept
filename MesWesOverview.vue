@@ -4,11 +4,7 @@
     <!-- TOPBAR -->
     <div class="mw-topbar">
       <span class="mw-title">&#9632; MES / WES Overview</span>
-      <div class="view-tabs">
-        <button class="view-tab" :class="{ active: view === 'both' }" @click="view = 'both'">Both</button>
-        <button class="view-tab" :class="{ active: view === 'mes'  }" @click="view = 'mes'">MES Only</button>
-        <button class="view-tab" :class="{ active: view === 'wes'  }" @click="view = 'wes'">WES Only</button>
-      </div>
+      <SegmentedToggle :tabs="viewTabs" v-model="view" />
       <div class="mw-live"><span class="live-dot"></span> LIVE | {{ clock }}</div>
     </div>
 
@@ -143,11 +139,18 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { mqttSubscribe, mqttUnsubscribe } from './src/mqttService'
+import SegmentedToggle from './SegmentedToggle.vue'
 
 type View = 'both' | 'mes' | 'wes'
 
 const view  = ref<View>('both')
 const clock = ref('')
+
+const viewTabs = [
+  { id: 'both', label: 'Both' },
+  { id: 'mes',  label: 'MES Only' },
+  { id: 'wes',  label: 'WES Only' },
+] as const
 
 let clockTimer: ReturnType<typeof setInterval> | null = null
 let liveTimer:  ReturnType<typeof setInterval> | null = null
@@ -298,20 +301,20 @@ onBeforeUnmount(() => {
 
 .mw-root { height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; color: #333; display: flex; flex-direction: column; }
 
-.mw-topbar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.mw-topbar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 0 16px; height: 42px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .mw-title  { font-size: 13px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.5px; }
-.view-tabs { display: flex; gap: 0; margin-left: 16px; border-bottom: 2px solid #c3c6d4; align-self: stretch; }
-.view-tab  { background: #fff; border: none; border-right: 1px solid #e0e0e0; color: #7f7f7f; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600; padding: 6px 18px; transition: background .15s, color .15s; letter-spacing: 0.4px; }
-.view-tab:hover  { background: #f2f2f2; color: #333; }
-.view-tab.active { background: #fff; color: #333; border-bottom: 2px solid #1565c0; margin-bottom: -2px; }
-.mw-live   { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #7f7f7f; margin-left: auto; }
-.live-dot  { width: 8px; height: 8px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
+.mw-live   { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #9e9e9e; margin-left: auto; }
+.live-dot  { width: 7px; height: 7px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
 @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
 
 .kpi-row  { display: flex; gap: 8px; padding: 10px 16px; flex-shrink: 0; }
-.kpi-card { background: #ffffff; border: 1px solid #c3c6d4; border-radius: 6px; padding: 10px 14px; flex: 1; }
-.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.kpi-val  { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi-card { background: #ffffff; border: 1px solid #c3c6d4; border-radius: 6px; padding: 10px 14px; flex: 1; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; position: relative; z-index: 1; }
+.kpi-val  { font-size: 22px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
 .kpi-sub  { font-size: 10px; color: #9e9e9e; margin-top: 2px; }
 .c-g { color: #388E3C; } .c-b { color: #1565c0; } .c-y { color: #f9a825; } .c-r { color: #e53935; } .c-w { color: #515151; }
 

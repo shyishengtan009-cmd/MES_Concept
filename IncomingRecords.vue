@@ -22,7 +22,7 @@
           <span class="insp-type-badge">{{ inspectRow.stockInType }}</span>
           <span class="insp-record-id">Stock In #{{ inspectRow.id }}</span>
         </div>
-        <span :class="['insp-status-chip', `isc--${inspectionForm.status}`]">
+        <span :class="['isc', `isc--${inspectionForm.status}`]">
           {{ statusLabel(inspectionForm.status) }}
         </span>
       </div>
@@ -558,11 +558,6 @@ function openNew() {
   detailMode.value       = 'new'
   isCorrectionMode.value = false
 }
-function openEditSelected() {
-  const id  = [...checkedIds.value][0]
-  const row = rows.value.find(r => r.id === id)
-  if (row) openEdit(row)
-}
 function closeDetail() { detailMode.value = null; isCorrectionMode.value = false }
 
 function saveRecord() {
@@ -831,7 +826,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .insp-nav-mid { display: flex; align-items: center; gap: 8px; }
 .insp-type-badge { background: #e3f2fd; color: #1565c0; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 3px; }
 .insp-record-id { font-size: 13px; font-weight: 700; color: #515151; }
-.insp-status-chip { margin-left: auto; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 12px; letter-spacing: 0.3px; }
+.isc { margin-left: auto; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.3px; }
 .isc--in_progress { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
 .isc--passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
 .isc--failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
@@ -855,7 +850,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .insp-tbl-wrap::-webkit-scrollbar { height: 4px; }
 .insp-tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 .insp-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
-.insp-tbl th { background: #f5f5f5; color: #9e9e9e; font-size: 9px; text-transform: uppercase; padding: 7px 10px; border-bottom: 1px solid #e8e8e8; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; text-align: left; }
+.insp-tbl th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; border-bottom: 2px solid #c3c6d4; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; text-align: left; }
 .insp-tbl td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; }
 .insp-tbl tbody tr:hover td { background: #fafafa; }
 .ic-ro { color: #515151; font-size: 11px; padding: 5px 10px !important; }
@@ -895,13 +890,13 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 
 .insp-footer { background: #fff; border-top: 1px solid #c3c6d4; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .insp-footer-right { display: flex; gap: 8px; }
-.insp-btn { border-radius: 4px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+.insp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
 .insp-cancel { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
 .insp-cancel:hover { background: #e8e8e8; }
 .insp-reject  { background: #fff; border-color: #ef9a9a; color: #c62828; }
 .insp-reject:hover  { background: #ffebee; }
-.insp-approve { background: #1565c0; color: #fff; }
-.insp-approve:hover { background: #1976d2; }
+.insp-approve { background: linear-gradient(135deg, #1976d2, #0d47a1); color: #fff; transition: transform .12s ease, box-shadow .12s ease; }
+.insp-approve:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 .insp-correct { background: #fff3e0; border-color: #ffb74d; color: #e65100; }
 .insp-correct:hover { background: #ffe0b2; }
 
@@ -923,7 +918,6 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .act-btn { background: #f5f5f5; border: 1px solid #c3c6d4; border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 28px; padding: 0 12px; display: flex; align-items: center; gap: 5px; transition: background .12s; color: #515151; }
 .act-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .act-new    { background: #e8f5e9; border-color: #a5d6a7; color: #388E3C; } .act-new:hover:not(:disabled)    { background: #c8e6c9; }
-.act-edit   { background: #e3f2fd; border-color: #90caf9; color: #1565c0; } .act-edit:hover:not(:disabled)   { background: #bbdefb; }
 .act-delete { background: #ffebee; border-color: #ef9a9a; color: #e53935; } .act-delete:hover:not(:disabled) { background: #ffcdd2; }
 .act-export { background: #fff9c4; border-color: #fdd835; color: #f9a825; } .act-export:hover { background: #fff59d; }
 .act-icon-btn { background: #f5f5f5; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; height: 28px; width: 28px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
@@ -1016,7 +1010,7 @@ tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
 .dp-footer { padding: 10px 16px; border-top: 1px solid #c3c6d4; display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; background: #fafafa; }
 .fp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 5px; border: 1px solid transparent; }
 .fp-cancel { background: #f5f5f5; border-color: #c3c6d4; color: #515151; } .fp-cancel:hover { background: #e8e8e8; }
-.fp-save   { background: #1565c0; color: #fff; }                            .fp-save:hover   { background: #1976d2; }
+.fp-save   { background: linear-gradient(135deg, #1976d2, #0d47a1); color: #fff; transition: transform .12s ease, box-shadow .12s ease; }   .fp-save:hover   { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 .fp-delete { background: #e53935; color: #fff; }                            .fp-delete:hover { background: #c62828; }
 
 /* ── Delete modal ── */

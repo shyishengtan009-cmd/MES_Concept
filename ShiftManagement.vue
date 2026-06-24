@@ -7,7 +7,7 @@
       <div class="topbar-right">
         <span class="live-clock"><i class="fa-solid fa-clock"></i> {{ clock }}</span>
         <button class="btn-primary"><i class="fa-solid fa-plus"></i> New Shift</button>
-        <button class="btn-outline-sm"><i class="fa-solid fa-file-export"></i> Export</button>
+        <button class="btn-outline-sm" @click="exportToExcel"><i class="fa-solid fa-file-export"></i> Export</button>
       </div>
     </div>
 
@@ -166,6 +166,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import ExcelJS from 'exceljs'
 
 const clock      = ref('')
 const rosterShift = ref('Morning')
@@ -217,6 +218,52 @@ const rosterMap: Record<string, Array<{ id:number; name:string; empId:string; ro
 
 const currentRoster = computed(() => rosterMap[rosterShift.value] ?? [])
 
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet(`${rosterShift.value} Roster`)
+
+  ws.columns = [
+    { header: 'Employee ID', key: 'empId',     width: 12 },
+    { header: 'Name',        key: 'name',       width: 22 },
+    { header: 'Role',        key: 'role',       width: 14 },
+    { header: 'Line',        key: 'line',       width: 14 },
+    { header: 'Shift Hours', key: 'hours',      width: 14 },
+    { header: 'Attendance',  key: 'attendance', width: 12 },
+    { header: 'Remarks',     key: 'remark',     width: 24 },
+  ]
+
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left' }
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } }
+  })
+
+  currentRoster.value.forEach((op, i) => {
+    const row = ws.addRow(op)
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Shift_Roster_${rosterShift.value}_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 const handover = [
   {
     line:'Line 1', statusLabel:'Running — WO in progress', statusCls:'b-blue',
@@ -265,12 +312,12 @@ function attCls(a: string)   { return { 'b-green': a==='Present', 'b-red': a==='
 *, *::before, *::after { box-sizing: border-box; }
 .root { height: 100%; display: flex; flex-direction: column; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; overflow: hidden; }
 
-.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; }
-.pg-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #515151; }
+.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.pg-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; }
 .topbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .live-clock { color: #1565c0; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
-.btn-primary { background: #1565c0; border: none; border-radius: 3px; color: #fff; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 12px; }
-.btn-primary:hover { background: #1976d2; }
+.btn-primary { background: linear-gradient(135deg, #1976d2, #0d47a1); border: none; border-radius: 3px; color: #fff; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 12px; transition: transform .12s ease, box-shadow .12s ease; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 .btn-outline-sm { background: #fff; border: 1px solid #d0d3e0; border-radius: 3px; color: #515151; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 10px; }
 .btn-outline-sm:hover { background: #f5f5f5; }
 

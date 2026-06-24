@@ -1,25 +1,5 @@
 <template>
-  <div class="inv-root">
-
-    <!-- TOPBAR -->
-    <div class="topbar">
-      <span class="pg-title">&#9632; Inventory</span>
-      <div class="pg-tabs">
-        <button class="pg-tab" :class="{ active: activeTab === 'overview'  }" @click="activeTab = 'overview'">
-          Overview
-        </button>
-        <button class="pg-tab" :class="{ active: activeTab === 'stock'     }" @click="activeTab = 'stock'">
-          Stock Register
-        </button>
-        <button class="pg-tab" :class="{ active: activeTab === 'movements' }" @click="activeTab = 'movements'">
-          Movements
-        </button>
-      </div>
-      <div class="topbar-right">
-        <span class="live-dot"></span>
-        <span>{{ clock }}</span>
-      </div>
-    </div>
+  <TabBarShell title="Inventory" :tabs="invTabs" v-model="activeTab">
 
     <!-- ── TAB: OVERVIEW ── -->
     <div class="tab-pane" v-show="activeTab === 'overview'">
@@ -154,24 +134,22 @@
       </div>
     </div>
 
-  </div>
+  </TabBarShell>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
+import TabBarShell from './TabBarShell.vue'
 
 type Tab = 'overview' | 'stock' | 'movements'
 
-const activeTab = ref<Tab>('overview')
-const clock     = ref('')
-let clockTimer: ReturnType<typeof setInterval> | null = null
+const invTabs = [
+  { id: 'overview',  label: 'Overview' },
+  { id: 'stock',     label: 'Stock Register' },
+  { id: 'movements', label: 'Movements' },
+] as const
 
-function tick() {
-  clock.value = new Date().toLocaleString('en-MY', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
-  })
-}
+const activeTab = ref<Tab>('overview')
 
 const categories = [
   { name: 'Packaging Material', qty: 41200, pct: 82, color: '#1565c0' },
@@ -290,38 +268,21 @@ function statusBadge(status: string): string {
   if (status === 'low')      return 'b-y'
   return 'b-g'
 }
-
-onMounted(() => {
-  tick()
-  clockTimer = setInterval(tick, 1000)
-})
-
-onBeforeUnmount(() => {
-  if (clockTimer) clearInterval(clockTimer)
-})
 </script>
 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-.inv-root { height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; color: #333; display: flex; flex-direction: column; }
-
-.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 0 16px; display: flex; align-items: stretch; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); height: 42px; }
-.pg-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; }
-.pg-tabs  { display: flex; margin-left: 16px; align-self: stretch; }
-.pg-tab   { background: transparent; border: none; border-bottom: 3px solid transparent; color: #7f7f7f; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; padding: 0 18px; transition: color .15s, border-color .15s; }
-.pg-tab:hover  { color: #333; background: #f5f5f5; }
-.pg-tab.active { color: #1565c0; border-bottom-color: #1565c0; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; font-size: 10px; color: #9e9e9e; gap: 6px; }
-.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
-@keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
-
-.tab-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+.tab-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; font-size: 12px; color: #333; }
 
 .kpi-row  { display: flex; gap: 1px; background: #c3c6d4; border-bottom: 2px solid #c3c6d4; flex-shrink: 0; }
-.kpi-card { flex: 1; background: #fff; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; }
-.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; }
-.kpi-val  { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi-card { flex: 1; background: #fff; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.kpi-val  { font-size: 22px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
 .kpi-sub  { font-size: 10px; color: #9e9e9e; }
 .c-g { color: #388E3C; } .c-b { color: #1565c0; } .c-y { color: #f9a825; } .c-r { color: #e53935; } .c-d { color: #515151; }
 
@@ -341,11 +302,11 @@ onBeforeUnmount(() => {
 .pc { background: #fff; border: 1px solid #c3c6d4; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .ph { padding: 8px 12px; font-size: 11px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); border-bottom: 1px solid #c3c6d4; display: flex; align-items: center; justify-content: space-between; }
 .ph-r { font-size: 10px; font-weight: 400; color: #9e9e9e; text-transform: none; letter-spacing: 0; }
-.pc-body { padding: 10px 12px; overflow-y: auto; flex: 1; }
+.pc-body { padding: 10px 12px; overflow-y: auto; overflow-x: hidden; flex: 1; }
 .pc-body::-webkit-scrollbar { width: 4px; }
 .pc-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 
-.tbl-wrap { flex: 1; overflow-y: auto; }
+.tbl-wrap { flex: 1; overflow-y: auto; overflow-x: hidden; }
 .tbl-wrap::-webkit-scrollbar { width: 4px; }
 .tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 table { width: 100%; border-collapse: collapse; font-size: 11px; }

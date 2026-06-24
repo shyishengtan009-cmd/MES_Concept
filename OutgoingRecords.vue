@@ -23,12 +23,7 @@
         </button>
         <span class="insp-sep">›</span>
         <span class="insp-nav-title">Dispatch Inspection — Stock Out #{{ inspectRow.id }}</span>
-        <span :class="['isc', 'isc--' + (inspForm.status)]" style="margin-left:10px">{{ inspStatusLabel }}</span>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          <button class="insp-close-btn" @click="closeInspect" title="Close without saving">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
+        <span :class="['isc', 'isc--' + (inspForm.status)]">{{ inspStatusLabel }}</span>
       </div>
 
       <!-- ── Inspection body — lift this block for Option B tab ── -->
@@ -38,16 +33,16 @@
         <div class="insp-card">
           <div class="insp-card-title">Record Summary</div>
           <div class="insp-summary-grid">
-            <div class="is-field"><span class="is-label">Stock Out Type</span><span class="is-val">{{ inspectRow.stockOutType }}</span></div>
-            <div class="is-field"><span class="is-label">Document</span><span class="is-val">{{ inspectRow.document }}</span></div>
-            <div class="is-field"><span class="is-label">Order No.</span><span class="is-val">{{ inspectRow.orderNo || '—' }}</span></div>
-            <div class="is-field"><span class="is-label">Method</span>
+            <div class="isf"><span class="isf-lbl">Stock Out Type</span><span class="isf-val">{{ inspectRow.stockOutType }}</span></div>
+            <div class="isf"><span class="isf-lbl">Document</span><span class="isf-val">{{ inspectRow.document }}</span></div>
+            <div class="isf"><span class="isf-lbl">Order No.</span><span class="isf-val">{{ inspectRow.orderNo || '—' }}</span></div>
+            <div class="isf"><span class="isf-lbl">Method</span>
               <span :class="['method-badge', inspectRow.method === 'RFID' ? 'badge-rfid' : 'badge-scan']">{{ inspectRow.method }}</span>
             </div>
-            <div class="is-field"><span class="is-label">Consignee</span><span class="is-val">{{ inspectRow.consignee || '—' }}</span></div>
-            <div class="is-field"><span class="is-label">Goods Qty</span><span class="is-val">{{ inspectRow.goodsTotal }}</span></div>
-            <div class="is-field"><span class="is-label">SKU Count</span><span class="is-val">{{ inspectRow.skuTotal }}</span></div>
-            <div class="is-field"><span class="is-label">Pack Unit</span><span class="is-val">{{ inspectRow.packUnit || '—' }}</span></div>
+            <div class="isf"><span class="isf-lbl">Consignee</span><span class="isf-val">{{ inspectRow.consignee || '—' }}</span></div>
+            <div class="isf"><span class="isf-lbl">Goods Qty</span><span class="isf-val">{{ inspectRow.goodsTotal }}</span></div>
+            <div class="isf"><span class="isf-lbl">SKU Count</span><span class="isf-val">{{ inspectRow.skuTotal }}</span></div>
+            <div class="isf"><span class="isf-lbl">Pack Unit</span><span class="isf-val">{{ inspectRow.packUnit || '—' }}</span></div>
           </div>
         </div>
 
@@ -57,8 +52,8 @@
             Dispatch Checklist
             <span class="insp-card-hint">Verify each line item before dispatch</span>
           </div>
-          <div class="lc-wrap">
-            <table class="lc-table">
+          <div class="insp-tbl-wrap">
+            <table class="insp-tbl">
               <thead>
                 <tr>
                   <th style="min-width:90px">SKU Code</th>
@@ -73,27 +68,27 @@
               </thead>
               <tbody>
                 <tr v-for="(lc, idx) in inspLineChecks" :key="idx" :class="lcRowClass(lc)">
-                  <td class="lc-ro">{{ lc.skuCode }}</td>
-                  <td class="lc-ro">{{ lc.skuName }}</td>
-                  <td class="lc-ro" style="text-align:right">{{ lc.orderQty }}</td>
+                  <td class="ic-ro">{{ lc.skuCode }}</td>
+                  <td class="ic-ro">{{ lc.skuName }}</td>
+                  <td class="ic-ro" style="text-align:right">{{ lc.orderQty }}</td>
                   <td style="text-align:right">
-                    <input class="lc-input lc-num" type="number" v-model.number="lc.dispatchedQty" min="0" />
+                    <input class="ic-input ic-num" type="number" v-model.number="lc.dispatchedQty" min="0" />
                   </td>
                   <td>
-                    <select class="lc-select" v-model="lc.packaging">
+                    <select class="ic-select" v-model="lc.packaging">
                       <option>Intact</option>
                       <option>Damaged</option>
                       <option>Repackaged</option>
                     </select>
                   </td>
                   <td style="text-align:center">
-                    <input type="checkbox" v-model="lc.halalLabel" />
+                    <input type="checkbox" v-model="lc.halalLabel" class="ic-chk" />
                   </td>
                   <td style="text-align:center">
-                    <input type="checkbox" v-model="lc.expiryValid" />
+                    <input type="checkbox" v-model="lc.expiryValid" class="ic-chk" />
                   </td>
                   <td>
-                    <input class="lc-input" type="text" v-model="lc.notes" placeholder="Remarks…" />
+                    <input class="ic-input" type="text" v-model="lc.notes" placeholder="Remarks…" />
                   </td>
                 </tr>
                 <tr v-if="inspLineChecks.length === 0">
@@ -127,14 +122,14 @@
 
       <!-- Inspection footer -->
       <div class="insp-footer">
-        <button class="ifp-btn ifp-back" @click="closeInspect">
+        <button class="insp-btn insp-cancel" @click="closeInspect">
           <i class="fa-solid fa-xmark"></i> Cancel
         </button>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="ifp-btn ifp-reject"  @click="submitInspection('failed')">
+        <div class="insp-footer-right">
+          <button class="insp-btn insp-reject"  @click="submitInspection('failed')">
             <i class="fa-solid fa-circle-xmark"></i> Hold Dispatch
           </button>
-          <button class="ifp-btn ifp-approve" @click="submitInspection('passed')">
+          <button class="insp-btn insp-approve" @click="submitInspection('passed')">
             <i class="fa-solid fa-circle-check"></i> Clear for Dispatch
           </button>
         </div>
@@ -633,11 +628,6 @@ function openNew() {
   editLineItems.value = []
   detailMode.value = 'new'
 }
-function openEditSelected() {
-  const id = [...checkedIds.value][0]
-  const row = rows.value.find(r => r.id === id)
-  if (row) openEdit(row)
-}
 function closeDetail() { detailMode.value = null; showStockPicker.value = false }
 
 function saveRecord() {
@@ -800,8 +790,6 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .act-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .act-new    { background: #e8f5e9; border-color: #a5d6a7; color: #388E3C; }
 .act-new:hover:not(:disabled)    { background: #c8e6c9; }
-.act-edit   { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
-.act-edit:hover:not(:disabled)   { background: #bbdefb; }
 .act-delete { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
 .act-delete:hover:not(:disabled) { background: #ffcdd2; }
 .act-export { background: #fff9c4; border-color: #fdd835; color: #f9a825; }
@@ -926,8 +914,8 @@ tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
 .fp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 5px; border: 1px solid transparent; }
 .fp-cancel { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
 .fp-cancel:hover { background: #e8e8e8; }
-.fp-save   { background: #1565c0; color: #fff; }
-.fp-save:hover { background: #1976d2; }
+.fp-save   { background: linear-gradient(135deg, #1976d2, #0d47a1); color: #fff; transition: transform .12s ease, box-shadow .12s ease; }
+.fp-save:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 .fp-delete { background: #e53935; color: #fff; }
 .fp-delete:hover { background: #c62828; }
 
@@ -959,12 +947,10 @@ tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
 .insp-back:hover { background: #e3f2fd; }
 .insp-sep { color: #9e9e9e; font-size: 12px; }
 .insp-nav-title { font-size: 12px; font-weight: 700; color: #515151; }
-.insp-close-btn { background: none; border: 1px solid #c3c6d4; border-radius: 3px; color: #757575; cursor: pointer; font-size: 13px; height: 26px; width: 26px; display: flex; align-items: center; justify-content: center; }
-.insp-close-btn:hover { background: #ffebee; border-color: #ef9a9a; color: #e53935; }
 
 /* Status chip */
-.isc { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
-.isc--in_progress { background: #fff9c4; color: #f57f17; border: 1px solid #f9a825; }
+.isc { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 8px; border-radius: 10px; }
+.isc--in_progress { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
 .isc--passed      { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
 .isc--failed      { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
 
@@ -987,23 +973,24 @@ tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
 
 /* Summary grid */
 .insp-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
-.is-field { padding: 8px 12px; border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; }
-.is-field:nth-child(4n) { border-right: none; }
-.is-label { display: block; font-size: 9px; font-weight: 700; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
-.is-val { font-size: 12px; font-weight: 600; color: #515151; }
+.isf { padding: 10px 14px; border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; }
+.isf:nth-child(4n) { border-right: none; }
+.isf-lbl { display: block; font-size: 9px; font-weight: 600; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 3px; }
+.isf-val { font-size: 11px; font-weight: 500; color: #515151; }
 
 /* Checklist table */
-.lc-wrap { overflow: auto; flex: 1; min-height: 120px; }
-.lc-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
-.lc-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
-.lc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.lc-table th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
-.lc-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
-.lc-ro { color: #757575; font-size: 11px; white-space: nowrap; }
-.lc-input { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 3px 6px; height: 26px; outline: none; width: 100%; min-width: 60px; }
-.lc-input:focus { border-color: #1565c0; }
-.lc-num { text-align: right; }
-.lc-select { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 3px 6px; height: 26px; outline: none; width: 100%; }
+.insp-tbl-wrap { overflow: auto; flex: 1; min-height: 120px; }
+.insp-tbl-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
+.insp-tbl-wrap::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
+.insp-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.insp-tbl th { background: linear-gradient(0deg, #d7d7d7 0%, #fff 100%); color: #515151; font-size: 10px; text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 2px solid #c3c6d4; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; white-space: nowrap; font-weight: 700; }
+.insp-tbl td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.ic-ro { color: #515151; font-size: 11px; padding: 5px 10px !important; white-space: nowrap; }
+.ic-input { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 4px 7px; height: 26px; outline: none; width: 100%; min-width: 60px; }
+.ic-input:focus { border-color: #1565c0; }
+.ic-num { text-align: right; width: 72px; }
+.ic-select { border: 1px solid #e0e0e0; border-radius: 3px; font-family: 'Poppins', sans-serif; font-size: 11px; color: #515151; padding: 4px 5px; height: 26px; outline: none; width: 100%; }
+.ic-chk { width: 14px; height: 14px; cursor: pointer; accent-color: #1565c0; }
 .lc-rejected td { background: #fff8f8 !important; }
 .lc-warn     td { background: #fffde7 !important; }
 
@@ -1013,16 +1000,16 @@ tbody tr.row-fail:hover td { background: #ffe0e0 !important; }
 /* Footer */
 .insp-footer {
   background: #fff; border-top: 1px solid #c3c6d4; padding: 10px 16px;
-  display: flex; align-items: center; flex-shrink: 0;
-  box-shadow: 0 -1px 4px rgba(0,0,0,.06);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
-.ifp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
-.ifp-back    { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
-.ifp-back:hover { background: #e8e8e8; }
-.ifp-reject  { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
-.ifp-reject:hover { background: #ffcdd2; }
-.ifp-approve { background: #1565c0; color: #fff; }
-.ifp-approve:hover { background: #1976d2; }
+.insp-footer-right { display: flex; gap: 8px; }
+.insp-btn { border-radius: 3px; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; height: 32px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+.insp-cancel    { background: #f5f5f5; border-color: #c3c6d4; color: #515151; }
+.insp-cancel:hover { background: #e8e8e8; }
+.insp-reject  { background: #fff; border-color: #ef9a9a; color: #c62828; }
+.insp-reject:hover { background: #ffebee; }
+.insp-approve { background: linear-gradient(135deg, #1976d2, #0d47a1); color: #fff; transition: transform .12s ease, box-shadow .12s ease; }
+.insp-approve:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(13,71,161,.4); }
 
 /* Stock picker overlay */
 .sp-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.5); z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; }

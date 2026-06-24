@@ -13,15 +13,15 @@
           <option value="Batch Plant 01">Batch Plant 01</option>
           <option value="Batch Plant 02">Batch Plant 02</option>
         </select>
-        <button class="btn-outline-sm"><i class="fa-solid fa-file-export"></i> Export</button>
+        <button class="btn-outline-sm" @click="exportToExcel"><i class="fa-solid fa-file-export"></i> Export</button>
       </div>
     </div>
 
     <!-- KPI Strip -->
     <div class="kpi-strip">
       <div class="kc" v-for="k in kpis" :key="k.label">
-        <div class="kc-val" :class="k.cls">{{ k.val }}</div>
         <div class="kc-lbl">{{ k.label }}</div>
+        <div class="kc-val" :class="k.cls">{{ k.val }}</div>
         <div v-if="k.sub" class="kc-sub" :class="k.subCls">{{ k.sub }}</div>
       </div>
     </div>
@@ -140,6 +140,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import ExcelJS from 'exceljs'
 
 const period     = ref('Today')
 const lineFilter = ref('All')
@@ -174,6 +175,52 @@ const downtimes = [
   { id:4, category:'Quality Hold',      catCls:'cat-qc',    equipment:'Batch Plant 01',  hours:3.0, cause:'Palm Olein FFA level out of spec — pending re-inspection', resolved:false, resCls:'b-red' },
 ]
 const totalDowntime = computed(() => downtimes.reduce((a, d) => a + d.hours, 0).toFixed(1))
+
+async function exportToExcel() {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'HIAS'
+  const ws = wb.addWorksheet('Downtime Analysis')
+
+  ws.columns = [
+    { header: 'Category',           key: 'category',  width: 20 },
+    { header: 'Equipment / Line',   key: 'equipment',  width: 18 },
+    { header: 'Duration (h)',       key: 'hours',      width: 14 },
+    { header: 'Root Cause',         key: 'cause',      width: 40 },
+    { header: 'Status',             key: 'resolvedTxt', width: 12 },
+  ]
+
+  const headerRow = ws.getRow(1)
+  headerRow.height = 22
+  headerRow.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } }
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' }
+    cell.alignment = { vertical: 'middle', horizontal: 'left' }
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } }
+  })
+
+  downtimes.forEach((d, i) => {
+    const row = ws.addRow({ ...d, resolvedTxt: d.resolved ? 'Resolved' : 'Open' })
+    row.height = 18
+    const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
+    row.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }
+      cell.font = { size: 10, name: 'Calibri', color: { argb: 'FF333333' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } } }
+    })
+    const statusCell = row.getCell('resolvedTxt')
+    statusCell.font = { ...statusCell.font as ExcelJS.Font, color: { argb: d.resolved ? 'FF2E7D32' : 'FFC62828' }, bold: true }
+  })
+
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `Production_Analysis_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const defects = [
   { type:'Fill Weight Deviation', units:82, pct:42 },
@@ -325,8 +372,8 @@ watch(period, () => requestAnimationFrame(drawChart))
 *, *::before, *::after { box-sizing: border-box; }
 .root { height: 100%; display: flex; flex-direction: column; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; overflow: hidden; }
 
-.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
-.pg-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #515151; flex-shrink: 0; }
+.topbar { background: #fff; border-bottom: 1px solid #c3c6d4; padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.pg-title { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; flex-shrink: 0; }
 .filters  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 .sf-btn { background: #f5f5f5; border: 1px solid #d0d3e0; border-radius: 3px; color: #515151; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 10px; padding: 4px 10px; }
 .sf-btn:hover { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
@@ -335,11 +382,15 @@ watch(period, () => requestAnimationFrame(drawChart))
 .btn-outline-sm { background: #fff; border: 1px solid #d0d3e0; border-radius: 3px; color: #515151; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 11px; gap: 5px; display: flex; align-items: center; padding: 5px 10px; }
 .btn-outline-sm:hover { background: #f5f5f5; }
 
-.kpi-strip { background: #c3c6d4; display: flex; gap: 1px; flex-shrink: 0; }
-.kc { background: #fff; flex: 1; padding: 8px 12px; }
-.kc-val { font-size: 18px; font-weight: 700; line-height: 1.1; }
-.kc-lbl { font-size: 10px; color: #757575; margin-top: 2px; }
-.kc-sub { font-size: 10px; margin-top: 1px; font-weight: 600; }
+.kpi-strip { background: #c3c6d4; display: flex; gap: 1px; flex-shrink: 0; border-bottom: 2px solid #c3c6d4; }
+.kc { background: #fff; flex: 1; padding: 9px 16px; display: flex; flex-direction: column; gap: 3px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kc:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kc::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 32px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kc::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kc-lbl { font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.5px; position: relative; z-index: 1; }
+.kc-val { font-size: 20px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
+.kc-sub { font-size: 10px; font-weight: 600; position: relative; z-index: 1; }
 .sub-green { color: #388E3C; } .sub-red { color: #e53935; }
 .c-blue   { color: #1565c0; } .c-green { color: #388E3C; }
 .c-amber  { color: #f9a825; } .c-red   { color: #e53935; }

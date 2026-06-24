@@ -4,10 +4,7 @@
     <!-- TOPBAR -->
     <div class="pm-topbar">
       <span class="pm-title">&#9632; Preventive Maintenance</span>
-      <div class="pm-tabs">
-        <button class="pm-tab" :class="{ active: activeTab === 'ffs' }" @click="activeTab = 'ffs'">&#9654; FFS Packaging Line (Indoors)</button>
-        <button class="pm-tab" :class="{ active: activeTab === 'bp' }"  @click="activeTab = 'bp'">&#9654; Batching Plant (Outdoors)</button>
-      </div>
+      <SegmentedToggle :tabs="lineTabs" v-model="activeTab" />
       <div class="pm-live">
         <span class="live-dot"></span>
         LIVE | <span>{{ clock }}</span>
@@ -135,9 +132,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import SegmentedToggle from './SegmentedToggle.vue'
 
 const activeTab = ref<'ffs' | 'bp'>('ffs')
 const clock     = ref('')
+
+const lineTabs = [
+  { id: 'ffs', label: '▶ FFS Packaging Line (Indoors)' },
+  { id: 'bp',  label: '▶ Batching Plant (Outdoors)' },
+] as const
 
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
@@ -219,22 +222,22 @@ const bpActivity = [
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .pm-root { height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; font-size: 12px; background: #f5f5f5; color: #333; display: flex; flex-direction: column; }
 
-.pm-topbar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 8px 16px; display: flex; align-items: center; gap: 0; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.pm-topbar { background: #ffffff; border-bottom: 1px solid #c3c6d4; padding: 0 16px; height: 42px; display: flex; align-items: center; gap: 0; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .pm-title  { font-size: 13px; font-weight: 700; color: #515151; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
-.pm-tabs   { display: flex; gap: 0; margin-left: 16px; border-bottom: 2px solid #c3c6d4; align-self: stretch; }
-.pm-tab    { background: #fff; border: none; border-right: 1px solid #e0e0e0; color: #7f7f7f; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600; padding: 6px 18px; transition: background .15s, color .15s; letter-spacing: 0.4px; }
-.pm-tab:hover  { background: #f2f2f2; color: #333; }
-.pm-tab.active { background: #fff; color: #333; border-bottom: 2px solid #1565c0; margin-bottom: -2px; }
-.pm-live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #7f7f7f; margin-left: auto; }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
+.pm-live { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #9e9e9e; margin-left: auto; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #43a047; animation: pulse 1.4s infinite; display: inline-block; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
 .tab-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
 
 .kpi-row  { display: flex; gap: 1px; background: #c3c6d4; border-bottom: 2px solid #c3c6d4; flex-shrink: 0; }
-.kpi-card { flex: 1; background: #ffffff; padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; }
-.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.6px; }
-.kpi-val  { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.kpi-card { flex: 1; background: #ffffff; padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; position: relative; overflow: hidden; border-left: 3px solid #1565c0; transition: transform .15s ease, box-shadow .15s ease; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.12); z-index: 2; }
+.kpi-card::before { content: '\f201'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 6px; top: 2px; font-size: 36px; color: #1565c0; opacity: .08; pointer-events: none; }
+.kpi-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #1565c0, transparent); background-size: 200% 100%; animation: kpi-shimmer 2.5s linear infinite; opacity: .35; }
+@keyframes kpi-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-label{ font-size: 10px; color: #7f7f7f; text-transform: uppercase; letter-spacing: 0.6px; position: relative; z-index: 1; }
+.kpi-val  { font-size: 22px; font-weight: 800; line-height: 1.1; position: relative; z-index: 1; }
 .kpi-sub  { font-size: 10px; color: #9e9e9e; }
 .c-green  { color: #388E3C; } .c-yellow { color: #f9a825; } .c-red { color: #e53935; } .c-blue { color: #1565c0; }
 
@@ -258,7 +261,7 @@ tr:hover td { background: #f2f2f2; }
 .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; min-height: 0; }
 .rp-card  { background: #ffffff; border: 1px solid #c3c6d4; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .rp-title { padding: 8px 12px; font-size: 11px; font-weight: 700; color: #515151; text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; background: linear-gradient(0deg,#d7d7d7 0%,#ffffff 100%); border-bottom: 1px solid #c3c6d4; }
-.rp-body  { padding: 10px 12px; overflow-y: auto; flex: 1; }
+.rp-body  { padding: 10px 12px; overflow-y: auto; overflow-x: hidden; flex: 1; }
 .rp-body::-webkit-scrollbar { width: 4px; }
 .rp-body::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 2px; }
 
