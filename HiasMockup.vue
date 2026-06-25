@@ -49,9 +49,9 @@
     <!-- MQTT STATUS BAR -->
     <div class="mqtt-status-bar" :class="`mqtt-${mqttStatus}`">
       <span class="mqtt-dot"></span>
-      <span v-if="mqttStatus === 'connected'">MQTT Connected &mdash; broker: REDACTED-BROKER-HOST</span>
-      <span v-else-if="mqttStatus === 'connecting'">MQTT Connecting&hellip;</span>
-      <span v-else>MQTT Disconnected &mdash; broker unreachable</span>
+      <span v-if="mqttStatus === 'connected'">Live Data Connected</span>
+      <span v-else-if="mqttStatus === 'connecting'">Connecting&hellip;</span>
+      <span v-else>Live Data Disconnected</span>
     </div>
 
     <!-- BODY -->
