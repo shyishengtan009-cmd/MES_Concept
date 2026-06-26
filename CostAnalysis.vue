@@ -19,31 +19,31 @@
     <div class="tab-pane" v-show="activeTab === 'overview'">
       <div class="kpi-row">
         <div class="kpi-card">
-          <div class="kpi-label">Total Cost MTD</div>
-          <div class="kpi-val c-d">RM 284,700</div>
-          <div class="kpi-sub"><span class="t-up">▲ +4.2%</span>&nbsp;vs Mar 2026</div>
+          <div class="kpi-label">Total Cost ({{ period }})</div>
+          <div class="kpi-val c-d">{{ fmtRM(totalActual) }}</div>
+          <div class="kpi-sub"><span class="t-up">▲ {{ meta.changeLabel }}</span></div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Material Cost</div>
-          <div class="kpi-val c-b">RM 196,400</div>
-          <div class="kpi-sub">69.0% of total</div>
+          <div class="kpi-val c-b">{{ fmtRM(materialCost) }}</div>
+          <div class="kpi-sub">{{ (materialCost / totalActual * 100).toFixed(1) }}% of total</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Overhead Cost</div>
-          <div class="kpi-val c-pur">RM 88,300</div>
-          <div class="kpi-sub">31.0% of total</div>
+          <div class="kpi-val c-pur">{{ fmtRM(overheadCost) }}</div>
+          <div class="kpi-sub">{{ (overheadCost / totalActual * 100).toFixed(1) }}% of total</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">vs Budget</div>
-          <div class="kpi-val c-r">+RM 12,700</div>
-          <div class="kpi-sub"><span class="t-up">+4.7% over budget</span></div>
+          <div class="kpi-val c-r">{{ vsBudgetAmt >= 0 ? '+' : '−' }}{{ fmtRM(Math.abs(vsBudgetAmt)) }}</div>
+          <div class="kpi-sub"><span class="t-up">{{ vsBudgetPct >= 0 ? '+' : '−' }}{{ Math.abs(vsBudgetPct).toFixed(1) }}% {{ vsBudgetPct >= 0 ? 'over' : 'under' }} budget</span></div>
         </div>
       </div>
 
       <div class="body-2col">
         <div class="col">
           <div class="pc" style="flex:1">
-            <div class="ph">Cost Breakdown <span class="ph-r">Apr 2026</span></div>
+            <div class="ph">Cost Breakdown <span class="ph-r">{{ meta.dateLabel }}</span></div>
             <div class="pc-body" style="padding:14px 16px">
               <div class="cb-row" v-for="item in breakdown" :key="item.name">
                 <div class="cb-dot" :style="{ background: item.color }"></div>
@@ -58,7 +58,7 @@
 
         <div class="col">
           <div class="pc" style="flex:1">
-            <div class="ph">Budget vs Actual <span class="ph-r">Apr 2026</span></div>
+            <div class="ph">Budget vs Actual <span class="ph-r">{{ meta.dateLabel }}</span></div>
             <div class="pc-body">
               <div class="bva-leg">
                 <span><span class="swatch" style="background:#bbdefb"></span>Budget</span>
@@ -96,7 +96,7 @@
       <div class="body-full">
         <div class="pc" style="flex:1">
           <div class="ph">
-            Material Cost — Apr 2026
+            Material Cost — {{ meta.dateLabel }}
             <span class="ph-r">Total: RM {{ matTotal.toLocaleString() }} — {{ filteredMaterial.length }} items</span>
           </div>
           <div class="tbl-wrap">
@@ -132,8 +132,8 @@
       <div class="body-full">
         <div class="pc" style="flex:1">
           <div class="ph">
-            Overhead Detail — Apr 2026
-            <span class="ph-r">Total: RM 88,300 &nbsp;|&nbsp; Budget: RM 81,900 &nbsp;|&nbsp; <span class="var-pos">+RM 6,400 (+7.8%)</span></span>
+            Overhead Detail — {{ meta.dateLabel }}
+            <span class="ph-r">Total: RM {{ overheadTotalActual.toLocaleString() }} &nbsp;|&nbsp; Budget: RM {{ overheadTotalBudget.toLocaleString() }} &nbsp;|&nbsp; <span :class="overheadVarianceAmt >= 0 ? 'var-pos' : 'var-neg'">{{ overheadVarianceAmt >= 0 ? '+' : '−' }}RM {{ Math.abs(overheadVarianceAmt).toLocaleString() }} ({{ overheadVariancePct >= 0 ? '+' : '−' }}{{ Math.abs(overheadVariancePct).toFixed(1) }}%)</span></span>
           </div>
           <div class="tbl-wrap">
             <table>
@@ -175,14 +175,73 @@ const activeTab = ref<Tab>('overview')
 const period    = ref('MTD')
 const periods   = ['MTD', 'This Month', 'Q1 2026', 'YTD']
 
-const breakdown = [
-  { name: 'Raw Materials', pct: 52.4, barPct: 100, value: 'RM 149,200', color: '#1565c0' },
-  { name: 'Packaging',     pct: 16.6, barPct: 44,  value: 'RM 47,200',  color: '#42a5f5' },
-  { name: 'Utilities',     pct: 11.8, barPct: 30,  value: 'RM 33,600',  color: '#7b1fa2' },
-  { name: 'Labour',        pct: 9.8,  barPct: 26,  value: 'RM 27,900',  color: '#ef9a9a' },
-  { name: 'Maintenance',   pct: 6.3,  barPct: 17,  value: 'RM 17,900',  color: '#f9a825' },
-  { name: 'Other',         pct: 3.1,  barPct: 11,  value: 'RM 8,900',   color: '#9e9e9e' },
-]
+interface CatRow { name: string; color: string; budget: number; actual: number }
+
+const periodCategories: Record<string, CatRow[]> = {
+  'MTD': [
+    { name: 'Raw Materials', color: '#1565c0', budget: 142000, actual: 149200 },
+    { name: 'Packaging',     color: '#42a5f5', budget: 48000,  actual: 47200  },
+    { name: 'Utilities',     color: '#7b1fa2', budget: 30000,  actual: 33600  },
+    { name: 'Labour',        color: '#ef9a9a', budget: 28000,  actual: 27900  },
+    { name: 'Maintenance',   color: '#f9a825', budget: 15000,  actual: 17900  },
+    { name: 'Other',         color: '#9e9e9e', budget: 9000,   actual: 8900   },
+  ],
+  'This Month': [
+    { name: 'Raw Materials', color: '#1565c0', budget: 165600, actual: 174000 },
+    { name: 'Packaging',     color: '#42a5f5', budget: 56000,  actual: 55100  },
+    { name: 'Utilities',     color: '#7b1fa2', budget: 35000,  actual: 39200  },
+    { name: 'Labour',        color: '#ef9a9a', budget: 32700,  actual: 32500  },
+    { name: 'Maintenance',   color: '#f9a825', budget: 17500,  actual: 20900  },
+    { name: 'Other',         color: '#9e9e9e', budget: 10500,  actual: 10300  },
+  ],
+  'Q1 2026': [
+    { name: 'Raw Materials', color: '#1565c0', budget: 419000, actual: 440200 },
+    { name: 'Packaging',     color: '#42a5f5', budget: 141600, actual: 139400 },
+    { name: 'Utilities',     color: '#7b1fa2', budget: 88500,  actual: 99100  },
+    { name: 'Labour',        color: '#ef9a9a', budget: 82600,  actual: 82300  },
+    { name: 'Maintenance',   color: '#f9a825', budget: 44300,  actual: 52900  },
+    { name: 'Other',         color: '#9e9e9e', budget: 26600,  actual: 26100  },
+  ],
+  'YTD': [
+    { name: 'Raw Materials', color: '#1565c0', budget: 573600, actual: 602600 },
+    { name: 'Packaging',     color: '#42a5f5', budget: 193900, actual: 190900 },
+    { name: 'Utilities',     color: '#7b1fa2', budget: 121200, actual: 135700 },
+    { name: 'Labour',        color: '#ef9a9a', budget: 113100, actual: 112700 },
+    { name: 'Maintenance',   color: '#f9a825', budget: 60600,  actual: 72500  },
+    { name: 'Other',         color: '#9e9e9e', budget: 36400,  actual: 35600  },
+  ],
+}
+
+const periodMeta: Record<string, { dateLabel: string; changeLabel: string }> = {
+  'MTD':        { dateLabel: 'Apr 2026',       changeLabel: '+4.2% vs Mar 2026' },
+  'This Month': { dateLabel: 'Apr 2026',       changeLabel: '+5.8% vs Mar 2026' },
+  'Q1 2026':    { dateLabel: 'Jan – Mar 2026', changeLabel: '+8.1% vs Q4 2025' },
+  'YTD':        { dateLabel: 'Jan – Apr 2026', changeLabel: '+6.4% vs YTD 2025' },
+}
+
+function fmtRM(n: number): string {
+  return `RM ${Math.round(n).toLocaleString()}`
+}
+
+const categories  = computed(() => periodCategories[period.value])
+const meta        = computed(() => periodMeta[period.value])
+const totalActual = computed(() => categories.value.reduce((s, c) => s + c.actual, 0))
+const totalBudget = computed(() => categories.value.reduce((s, c) => s + c.budget, 0))
+const materialCost = computed(() => (categories.value[0]?.actual ?? 0) + (categories.value[1]?.actual ?? 0))
+const overheadCost = computed(() => totalActual.value - materialCost.value)
+const vsBudgetAmt   = computed(() => totalActual.value - totalBudget.value)
+const vsBudgetPct   = computed(() => totalBudget.value ? (vsBudgetAmt.value / totalBudget.value) * 100 : 0)
+
+const breakdown = computed(() => {
+  const max = Math.max(...categories.value.map(c => c.actual))
+  return categories.value.map(c => ({
+    name: c.name,
+    color: c.color,
+    value: fmtRM(c.actual),
+    pct: totalActual.value ? +(c.actual / totalActual.value * 100).toFixed(1) : 0,
+    barPct: max ? Math.round((c.actual / max) * 100) : 0,
+  }))
+})
 
 async function exportToExcel() {
   const wb = new ExcelJS.Workbook()
@@ -204,7 +263,7 @@ async function exportToExcel() {
     cell.border = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } }
   })
 
-  breakdown.forEach((b, i) => {
+  breakdown.value.forEach((b, i) => {
     const row = ws.addRow({ name: b.name, pct: b.pct, value: b.value })
     row.height = 18
     const fillColor = i % 2 === 0 ? 'FFFFFFFF' : 'FFF3F7FB'
@@ -226,52 +285,167 @@ async function exportToExcel() {
   URL.revokeObjectURL(url)
 }
 
-const budgetVsActual = [
-  { name: 'Raw Materials',  budget: 'RM 142,000', actual: 'RM 149,200', variance: '+5.1%',  over: true,  budgetBarPct: 100, actualBarPct: 105 },
-  { name: 'Packaging',      budget: 'RM 48,000',  actual: 'RM 47,200',  variance: '−1.7%',  over: false, budgetBarPct: 100, actualBarPct: 98  },
-  { name: 'Utilities',      budget: 'RM 30,000',  actual: 'RM 33,600',  variance: '+12.0%', over: true,  budgetBarPct: 100, actualBarPct: 112 },
-  { name: 'Labour',         budget: 'RM 28,000',  actual: 'RM 27,900',  variance: '−0.4%',  over: false, budgetBarPct: 100, actualBarPct: 99  },
-  { name: 'Maintenance',    budget: 'RM 15,000',  actual: 'RM 17,900',  variance: '+19.3%', over: true,  budgetBarPct: 100, actualBarPct: 119 },
-  { name: 'Other Overhead', budget: 'RM 9,000',   actual: 'RM 8,900',   variance: '−1.1%',  over: false, budgetBarPct: 100, actualBarPct: 99  },
-]
+const budgetVsActual = computed(() => categories.value.map(c => {
+  const variancePct = c.budget ? ((c.actual - c.budget) / c.budget) * 100 : 0
+  const over = variancePct >= 0
+  return {
+    name: c.name === 'Other' ? 'Other Overhead' : c.name,
+    budget: fmtRM(c.budget),
+    actual: fmtRM(c.actual),
+    variance: `${over ? '+' : '−'}${Math.abs(variancePct).toFixed(1)}%`,
+    over,
+    budgetBarPct: 100,
+    actualBarPct: c.budget ? Math.round((c.actual / c.budget) * 100) : 0,
+  }
+}))
 
-const materialRows = [
-  { name: 'Halal Seasoning Blend A', category: 'food',      categoryLabel: 'Food Ingredient',    total: 38200, pct: '19.5%', vsLastMonth: '+1,400', vsPositive: true  },
-  { name: 'FFS Film Roll 500mm',      category: 'packaging', categoryLabel: 'Packaging',           total: 28600, pct: '14.6%', vsLastMonth: '−320',   vsPositive: false },
-  { name: 'Tomato Paste (Drum)',       category: 'food',      categoryLabel: 'Food Ingredient',    total: 24800, pct: '12.6%', vsLastMonth: '+2,100', vsPositive: true  },
-  { name: 'Palm Olein Oil (5L)',       category: 'food',      categoryLabel: 'Food Ingredient',    total: 18900, pct: '9.6%',  vsLastMonth: '−600',   vsPositive: false },
-  { name: 'Corrugated Box 400×300',   category: 'packaging', categoryLabel: 'Packaging',           total: 17000, pct: '8.7%',  vsLastMonth: '+800',   vsPositive: true  },
-  { name: 'White Sugar (50kg bag)',    category: 'food',      categoryLabel: 'Food Ingredient',    total: 6900,  pct: '3.5%',  vsLastMonth: '−300',   vsPositive: false },
-  { name: 'Label Sticker 50×30mm',    category: 'packaging', categoryLabel: 'Packaging',           total: 3360,  pct: '1.7%',  vsLastMonth: '+160',   vsPositive: true  },
-  { name: 'LDPE Shrink Film 20µm',    category: 'packaging', categoryLabel: 'Packaging',           total: 1980,  pct: '1.0%',  vsLastMonth: '−220',   vsPositive: false },
-  { name: 'Sodium Benzoate E211',      category: 'chemical',  categoryLabel: 'Chemical / Additive',total: 1296,  pct: '0.7%',  vsLastMonth: '+96',    vsPositive: true  },
-  { name: 'Vitamin C Ascorbic Acid',   category: 'chemical',  categoryLabel: 'Chemical / Additive',total: 912,   pct: '0.5%',  vsLastMonth: '−38',    vsPositive: false },
-]
+interface MaterialRowRaw { name: string; category: string; categoryLabel: string; total: number; vsLastMonth: number; vsPositive: boolean }
 
-const catTotals: Record<string, number> = { all: 196400, food: 88800, packaging: 50940, chemical: 2208 }
+const periodMaterialRows: Record<string, MaterialRowRaw[]> = {
+  'MTD': [
+    { name: 'Halal Seasoning Blend A', category: 'food',      categoryLabel: 'Food Ingredient',     total: 38200, vsLastMonth: 1400,  vsPositive: true  },
+    { name: 'FFS Film Roll 500mm',     category: 'packaging', categoryLabel: 'Packaging',           total: 28600, vsLastMonth: -320,  vsPositive: false },
+    { name: 'Tomato Paste (Drum)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 24800, vsLastMonth: 2100,  vsPositive: true  },
+    { name: 'Palm Olein Oil (5L)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 18900, vsLastMonth: -600,  vsPositive: false },
+    { name: 'Corrugated Box 400×300',  category: 'packaging', categoryLabel: 'Packaging',           total: 17000, vsLastMonth: 800,   vsPositive: true  },
+    { name: 'White Sugar (50kg bag)',  category: 'food',      categoryLabel: 'Food Ingredient',     total: 6900,  vsLastMonth: -300,  vsPositive: false },
+    { name: 'Label Sticker 50×30mm',   category: 'packaging', categoryLabel: 'Packaging',           total: 3360,  vsLastMonth: 160,   vsPositive: true  },
+    { name: 'LDPE Shrink Film 20µm',   category: 'packaging', categoryLabel: 'Packaging',           total: 1980,  vsLastMonth: -220,  vsPositive: false },
+    { name: 'Sodium Benzoate E211',    category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 1296,  vsLastMonth: 96,    vsPositive: true  },
+    { name: 'Vitamin C Ascorbic Acid', category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 912,   vsLastMonth: -38,   vsPositive: false },
+  ],
+  'This Month': [
+    { name: 'Halal Seasoning Blend A', category: 'food',      categoryLabel: 'Food Ingredient',     total: 44500, vsLastMonth: 1630,  vsPositive: true  },
+    { name: 'FFS Film Roll 500mm',     category: 'packaging', categoryLabel: 'Packaging',           total: 33400, vsLastMonth: -370,  vsPositive: false },
+    { name: 'Tomato Paste (Drum)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 28900, vsLastMonth: 2450,  vsPositive: true  },
+    { name: 'Palm Olein Oil (5L)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 22000, vsLastMonth: -700,  vsPositive: false },
+    { name: 'Corrugated Box 400×300',  category: 'packaging', categoryLabel: 'Packaging',           total: 19800, vsLastMonth: 930,   vsPositive: true  },
+    { name: 'White Sugar (50kg bag)',  category: 'food',      categoryLabel: 'Food Ingredient',     total: 8050,  vsLastMonth: -350,  vsPositive: false },
+    { name: 'Label Sticker 50×30mm',   category: 'packaging', categoryLabel: 'Packaging',           total: 3920,  vsLastMonth: 190,   vsPositive: true  },
+    { name: 'LDPE Shrink Film 20µm',   category: 'packaging', categoryLabel: 'Packaging',           total: 2310,  vsLastMonth: -260,  vsPositive: false },
+    { name: 'Sodium Benzoate E211',    category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 1510,  vsLastMonth: 110,   vsPositive: true  },
+    { name: 'Vitamin C Ascorbic Acid', category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 1060,  vsLastMonth: -40,   vsPositive: false },
+  ],
+  'Q1 2026': [
+    { name: 'Halal Seasoning Blend A', category: 'food',      categoryLabel: 'Food Ingredient',     total: 112700, vsLastMonth: 4130,  vsPositive: true  },
+    { name: 'FFS Film Roll 500mm',     category: 'packaging', categoryLabel: 'Packaging',           total: 84400,  vsLastMonth: -940,  vsPositive: false },
+    { name: 'Tomato Paste (Drum)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 73200,  vsLastMonth: 6200,  vsPositive: true  },
+    { name: 'Palm Olein Oil (5L)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 55800,  vsLastMonth: -1770, vsPositive: false },
+    { name: 'Corrugated Box 400×300',  category: 'packaging', categoryLabel: 'Packaging',           total: 50200,  vsLastMonth: 2360,  vsPositive: true  },
+    { name: 'White Sugar (50kg bag)',  category: 'food',      categoryLabel: 'Food Ingredient',     total: 20400,  vsLastMonth: -890,  vsPositive: false },
+    { name: 'Label Sticker 50×30mm',   category: 'packaging', categoryLabel: 'Packaging',           total: 9910,   vsLastMonth: 470,   vsPositive: true  },
+    { name: 'LDPE Shrink Film 20µm',   category: 'packaging', categoryLabel: 'Packaging',           total: 5840,   vsLastMonth: -650,  vsPositive: false },
+    { name: 'Sodium Benzoate E211',    category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 3820,   vsLastMonth: 280,   vsPositive: true  },
+    { name: 'Vitamin C Ascorbic Acid', category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 2690,   vsLastMonth: -110,  vsPositive: false },
+  ],
+  'YTD': [
+    { name: 'Halal Seasoning Blend A', category: 'food',      categoryLabel: 'Food Ingredient',     total: 154300, vsLastMonth: 5660,  vsPositive: true  },
+    { name: 'FFS Film Roll 500mm',     category: 'packaging', categoryLabel: 'Packaging',           total: 115500, vsLastMonth: -1290, vsPositive: false },
+    { name: 'Tomato Paste (Drum)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 100200, vsLastMonth: 8480,  vsPositive: true  },
+    { name: 'Palm Olein Oil (5L)',     category: 'food',      categoryLabel: 'Food Ingredient',     total: 76300,  vsLastMonth: -2420, vsPositive: false },
+    { name: 'Corrugated Box 400×300',  category: 'packaging', categoryLabel: 'Packaging',           total: 68700,  vsLastMonth: 3230,  vsPositive: true  },
+    { name: 'White Sugar (50kg bag)',  category: 'food',      categoryLabel: 'Food Ingredient',     total: 27900,  vsLastMonth: -1210, vsPositive: false },
+    { name: 'Label Sticker 50×30mm',   category: 'packaging', categoryLabel: 'Packaging',           total: 13600,  vsLastMonth: 650,   vsPositive: true  },
+    { name: 'LDPE Shrink Film 20µm',   category: 'packaging', categoryLabel: 'Packaging',           total: 8000,   vsLastMonth: -890,  vsPositive: false },
+    { name: 'Sodium Benzoate E211',    category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 5240,   vsLastMonth: 390,   vsPositive: true  },
+    { name: 'Vitamin C Ascorbic Acid', category: 'chemical',  categoryLabel: 'Chemical / Additive', total: 3680,   vsLastMonth: -150,  vsPositive: false },
+  ],
+}
 
 const matCat = ref<string>('all')
 
-const filteredMaterial = computed(() =>
-  matCat.value === 'all' ? materialRows : materialRows.filter(r => r.category === matCat.value)
-)
+const materialRowsForPeriod = computed(() => periodMaterialRows[period.value])
+const materialTotalForPeriod = computed(() => materialRowsForPeriod.value.reduce((s, r) => s + r.total, 0))
 
-const matTotal = computed(() => catTotals[matCat.value] ?? 196400)
+const filteredMaterial = computed(() => {
+  const rows = matCat.value === 'all'
+    ? materialRowsForPeriod.value
+    : materialRowsForPeriod.value.filter(r => r.category === matCat.value)
+  const total = materialTotalForPeriod.value
+  return rows.map(r => ({
+    ...r,
+    pct: total ? `${(r.total / total * 100).toFixed(1)}%` : '0%',
+    vsLastMonth: `${r.vsLastMonth >= 0 ? '+' : '−'}${Math.abs(r.vsLastMonth).toLocaleString()}`,
+  }))
+})
 
-const overhead = [
-  { category: 'Utilities',   item: 'Electricity — Production',   budget: 19100, actual: 21400, variance: '+2,300', over: true  },
-  { category: 'Utilities',   item: 'Electricity — Cooling',      budget: 6800,  actual: 7000,  variance: '+200',   over: true  },
-  { category: 'Utilities',   item: 'Natural Gas',                budget: 3600,  actual: 3400,  variance: '−200',   over: false },
-  { category: 'Utilities',   item: 'Water',                      budget: 1900,  actual: 1800,  variance: '−100',   over: false },
-  { category: 'Labour',      item: 'Direct Labour (Production)', budget: 22000, actual: 21600, variance: '−400',   over: false },
-  { category: 'Labour',      item: 'Overtime Allowance',         budget: 4000,  actual: 4800,  variance: '+800',   over: true  },
-  { category: 'Labour',      item: 'Contractor Labour',          budget: 2000,  actual: 1500,  variance: '−500',   over: false },
-  { category: 'Maintenance', item: 'Preventive Maintenance',     budget: 8000,  actual: 9200,  variance: '+1,200', over: true  },
-  { category: 'Maintenance', item: 'Corrective Repairs',         budget: 4000,  actual: 6400,  variance: '+2,400', over: true  },
-  { category: 'Maintenance', item: 'Consumables / Lubrication',  budget: 3000,  actual: 2300,  variance: '−700',   over: false },
-  { category: 'Other',       item: 'Logistics / Inbound Freight',budget: 5000,  actual: 5200,  variance: '+200',   over: true  },
-  { category: 'Other',       item: 'Admin & General',            budget: 4000,  actual: 3700,  variance: '−300',   over: false },
-]
+const matTotal = computed(() => filteredMaterial.value.reduce((s, r) => s + r.total, 0))
+
+interface OverheadRowRaw { category: string; item: string; budget: number; actual: number }
+
+const periodOverhead: Record<string, OverheadRowRaw[]> = {
+  'MTD': [
+    { category: 'Utilities',   item: 'Electricity — Production',    budget: 19100, actual: 21400 },
+    { category: 'Utilities',   item: 'Electricity — Cooling',       budget: 6800,  actual: 7000  },
+    { category: 'Utilities',   item: 'Natural Gas',                 budget: 3600,  actual: 3400  },
+    { category: 'Utilities',   item: 'Water',                       budget: 1900,  actual: 1800  },
+    { category: 'Labour',      item: 'Direct Labour (Production)',  budget: 22000, actual: 21600 },
+    { category: 'Labour',      item: 'Overtime Allowance',          budget: 4000,  actual: 4800  },
+    { category: 'Labour',      item: 'Contractor Labour',           budget: 2000,  actual: 1500  },
+    { category: 'Maintenance', item: 'Preventive Maintenance',      budget: 8000,  actual: 9200  },
+    { category: 'Maintenance', item: 'Corrective Repairs',          budget: 4000,  actual: 6400  },
+    { category: 'Maintenance', item: 'Consumables / Lubrication',   budget: 3000,  actual: 2300  },
+    { category: 'Other',       item: 'Logistics / Inbound Freight', budget: 5000,  actual: 5200  },
+    { category: 'Other',       item: 'Admin & General',             budget: 4000,  actual: 3700  },
+  ],
+  'This Month': [
+    { category: 'Utilities',   item: 'Electricity — Production',    budget: 22300, actual: 25000 },
+    { category: 'Utilities',   item: 'Electricity — Cooling',       budget: 7900,  actual: 8200  },
+    { category: 'Utilities',   item: 'Natural Gas',                 budget: 4200,  actual: 4000  },
+    { category: 'Utilities',   item: 'Water',                       budget: 2200,  actual: 2100  },
+    { category: 'Labour',      item: 'Direct Labour (Production)',  budget: 25700, actual: 25200 },
+    { category: 'Labour',      item: 'Overtime Allowance',          budget: 4700,  actual: 5600  },
+    { category: 'Labour',      item: 'Contractor Labour',           budget: 2300,  actual: 1750  },
+    { category: 'Maintenance', item: 'Preventive Maintenance',      budget: 9300,  actual: 10700 },
+    { category: 'Maintenance', item: 'Corrective Repairs',          budget: 4700,  actual: 7500  },
+    { category: 'Maintenance', item: 'Consumables / Lubrication',   budget: 3500,  actual: 2700  },
+    { category: 'Other',       item: 'Logistics / Inbound Freight', budget: 5800,  actual: 6100  },
+    { category: 'Other',       item: 'Admin & General',             budget: 4700,  actual: 4300  },
+  ],
+  'Q1 2026': [
+    { category: 'Utilities',   item: 'Electricity — Production',    budget: 56400, actual: 63100 },
+    { category: 'Utilities',   item: 'Electricity — Cooling',       budget: 20100, actual: 20700 },
+    { category: 'Utilities',   item: 'Natural Gas',                 budget: 10600, actual: 10000 },
+    { category: 'Utilities',   item: 'Water',                       budget: 5600,  actual: 5300  },
+    { category: 'Labour',      item: 'Direct Labour (Production)',  budget: 64900, actual: 63700 },
+    { category: 'Labour',      item: 'Overtime Allowance',          budget: 11800, actual: 14200 },
+    { category: 'Labour',      item: 'Contractor Labour',           budget: 5900,  actual: 4400  },
+    { category: 'Maintenance', item: 'Preventive Maintenance',      budget: 23600, actual: 27100 },
+    { category: 'Maintenance', item: 'Corrective Repairs',          budget: 11800, actual: 18900 },
+    { category: 'Maintenance', item: 'Consumables / Lubrication',   budget: 8900,  actual: 6800  },
+    { category: 'Other',       item: 'Logistics / Inbound Freight', budget: 14800, actual: 15300 },
+    { category: 'Other',       item: 'Admin & General',             budget: 11800, actual: 10900 },
+  ],
+  'YTD': [
+    { category: 'Utilities',   item: 'Electricity — Production',    budget: 77200, actual: 86400 },
+    { category: 'Utilities',   item: 'Electricity — Cooling',       budget: 27500, actual: 28300 },
+    { category: 'Utilities',   item: 'Natural Gas',                 budget: 14500, actual: 13700 },
+    { category: 'Utilities',   item: 'Water',                       budget: 7700,  actual: 7300  },
+    { category: 'Labour',      item: 'Direct Labour (Production)',  budget: 88900, actual: 87300 },
+    { category: 'Labour',      item: 'Overtime Allowance',          budget: 16200, actual: 19400 },
+    { category: 'Labour',      item: 'Contractor Labour',           budget: 8100,  actual: 6100  },
+    { category: 'Maintenance', item: 'Preventive Maintenance',      budget: 32300, actual: 37200 },
+    { category: 'Maintenance', item: 'Corrective Repairs',          budget: 16200, actual: 25900 },
+    { category: 'Maintenance', item: 'Consumables / Lubrication',   budget: 12100, actual: 9300  },
+    { category: 'Other',       item: 'Logistics / Inbound Freight', budget: 20200, actual: 21000 },
+    { category: 'Other',       item: 'Admin & General',             budget: 16200, actual: 14900 },
+  ],
+}
+
+const overhead = computed(() => periodOverhead[period.value].map(r => {
+  const diff = r.actual - r.budget
+  const over = diff >= 0
+  return {
+    ...r,
+    over,
+    variance: `${over ? '+' : '−'}${Math.abs(diff).toLocaleString()}`,
+  }
+}))
+
+const overheadTotalActual  = computed(() => overhead.value.reduce((s, r) => s + r.actual, 0))
+const overheadTotalBudget  = computed(() => overhead.value.reduce((s, r) => s + r.budget, 0))
+const overheadVarianceAmt  = computed(() => overheadTotalActual.value - overheadTotalBudget.value)
+const overheadVariancePct  = computed(() => overheadTotalBudget.value ? (overheadVarianceAmt.value / overheadTotalBudget.value) * 100 : 0)
 
 function overBadge(row: { over: boolean; variance: string }): string {
   if (!row.over) return 'b-g'
