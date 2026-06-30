@@ -10,7 +10,7 @@
             <i class="fa-solid fa-bars"></i>
           </button>
           <div class="hias-logo">
-            <img src="/hias-logo.png" alt="HIAS Logo" />
+            <span class="brand-text">MES</span>
           </div>
         </div>
 
@@ -74,7 +74,7 @@
             >
               <i :class="menu.icon" class="nav-icon-el"></i>
             </div>
-            <div class="nav-label-section">
+            <div class="nav-label-section" v-if="showLabel(menu.name)">
               <div class="nav-label-text">{{ menu.name }}</div>
             </div>
             <div
@@ -217,6 +217,7 @@ function selectChild(child: string, parent: string) {
   if (pageMap[key]) currentPage.value = pageMap[key]
 }
 
+function showLabel      (name: string) { return name === 'MES' || name === 'Inventory' }
 function isOpen        (name: string) { return openMenus.value.includes(name) }
 function isActiveParent(name: string) { return activeParent.value === name }
 function isActiveChild (child: string){ return activeChild.value === child }
@@ -295,7 +296,7 @@ function isActiveChild (child: string){ return activeChild.value === child }
 }
 .btn-flat-round:hover { background: #f0f0f0; }
 .hias-logo { display: flex; align-items: center; padding: 0 8px; }
-.hias-logo img { height: 28px; }
+.brand-text { font-size: 20px; font-weight: 800; color: #1565c0; letter-spacing: 0.5px; }
 
 .menu-section {
   display: flex;
