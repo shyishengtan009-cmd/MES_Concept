@@ -62,14 +62,14 @@
         <div v-for="menu in menus" :key="menu.name" class="nav-exp-item">
           <div
             class="nav-item-row"
-            :class="{ activeNavItem: isActiveParent(menu.name) && (isOpen(menu.name) || !menu.children.length) }"
-            @click="toggleMenu(menu.name, menu.children.length > 0)"
+            :class="{ activeNavItem: isActiveParent(menu.name) && (isOpen(menu.name) || !hasDropdown(menu)) }"
+            @click="toggleMenu(menu.name, hasDropdown(menu))"
           >
             <div
               class="nav-icon-section"
               :class="{
-                orangeBorder: isActiveParent(menu.name) && (isOpen(menu.name) || !menu.children.length),
-                activeIcon:   isActiveParent(menu.name) && (isOpen(menu.name) || !menu.children.length)
+                orangeBorder: isActiveParent(menu.name) && (isOpen(menu.name) || !hasDropdown(menu)),
+                activeIcon:   isActiveParent(menu.name) && (isOpen(menu.name) || !hasDropdown(menu))
               }"
             >
               <i :class="menu.icon" class="nav-icon-el"></i>
@@ -78,7 +78,7 @@
               <div class="nav-label-text">{{ menu.name }}</div>
             </div>
             <div
-              v-if="menu.children.length"
+              v-if="hasDropdown(menu)"
               class="nav-expand-icon"
               :class="{ 'nav-expand-icon--open': isOpen(menu.name) }"
             >
@@ -86,7 +86,7 @@
             </div>
           </div>
 
-          <div class="nav-children-wrap" :class="{ 'nav-children--open': isOpen(menu.name) }">
+          <div v-if="hasDropdown(menu)" class="nav-children-wrap" :class="{ 'nav-children--open': isOpen(menu.name) }">
             <div
               v-for="child in menu.children"
               :key="child.name"
@@ -218,6 +218,7 @@ function selectChild(child: string, parent: string) {
 }
 
 function showLabel      (name: string) { return name === 'MES' || name === 'Inventory' }
+function hasDropdown    (menu: MenuItem) { return showLabel(menu.name) && menu.children.length > 0 }
 function isOpen        (name: string) { return openMenus.value.includes(name) }
 function isActiveParent(name: string) { return activeParent.value === name }
 function isActiveChild (child: string){ return activeChild.value === child }
